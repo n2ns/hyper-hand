@@ -30,12 +30,17 @@ type adminRequest struct {
 	Deadline time.Time
 }
 
+// errElevationPending: the deadline passed before the elevated worker received the request.
+var errElevationPending = errors.New("timed out before the elevated worker received the request")
+
 type adminReply struct {
 	Result proto.ExecResult
 	PID    uint32
 	Error  string
 }
 
+// execAdmin runs a command elevated. A timeout returns TimedOut, with ElevationPending when the command never reached
+// the worker.
 func execAdmin(ctx context.Context, a proto.ExecArgs) (any, []byte, error) {
 	return execAdminWithLauncher(ctx, a, launchAdmin)
 }
@@ -60,7 +65,7 @@ func execAdminWithLauncher(ctx context.Context, a proto.ExecArgs, launch func(co
 	reply, err := adminCall(ctx, opctx, adminRequest{Args: a}, launch)
 	if err != nil {
 		if ctx.Err() == nil && opctx.Err() != nil {
-			return proto.ExecResult{ExitCode: -1, TimedOut: true}, nil, nil
+			return proto.ExecResult{ExitCode: -1, TimedOut: true, ElevationPending: errors.Is(err, errElevationPending)}, nil, nil
 		}
 		return adminInterrupted(ctx, err)
 	}
@@ -95,7 +100,8 @@ func launchAdminWithLauncher(ctx context.Context, a proto.LaunchArgs, launch fun
 	return proto.LaunchResult{PID: reply.PID}, nil, nil
 }
 
-// adminCall sends one request to a freshly elevated worker and returns its reply. The launcher runs only
+// adminCall sends one request to a freshly elevated worker and returns its reply, or errElevationPending when opctx's
+// deadline passes before the worker received the request (so it did not run). The launcher runs only
 // ShellExecuteEx, in a disposable ordinary process. The elevated worker receives the request only over this live,
 // single-use pipe. opctx bounds the whole exchange; its deadline is the one the worker enforces.
 func adminCall(ctx, opctx context.Context, req adminRequest, launch func(context.Context, adminEndpoint) error) (adminReply, error) {
@@ -133,13 +139,20 @@ func adminCall(ctx, opctx context.Context, req adminRequest, launch func(context
 	go func() { launchErr = launch(launchCtx, endpoint); close(launched) }()
 	defer func() { stopLaunch(); <-launched }()
 	launchDone := launched
+	// notSent is the error while the request has not reached the worker: an expired deadline means elevation pending.
+	notSent := func() error {
+		if ctx.Err() == nil && errors.Is(opctx.Err(), context.DeadlineExceeded) {
+			return errElevationPending
+		}
+		return opctx.Err()
+	}
 	for {
 		select {
 		case <-opctx.Done():
-			return adminReply{}, opctx.Err()
+			return adminReply{}, notSent()
 		case <-launchDone:
 			if opctx.Err() != nil {
-				return adminReply{}, opctx.Err()
+				return adminReply{}, notSent()
 			}
 			if launchErr != nil {
 				return adminReply{}, launchErr
@@ -147,7 +160,7 @@ func adminCall(ctx, opctx context.Context, req adminRequest, launch func(context
 			launchDone = nil // runas succeeded; the worker may still be connecting
 		case <-accepted:
 			if opctx.Err() != nil {
-				return adminReply{}, opctx.Err()
+				return adminReply{}, notSent()
 			}
 			if acceptErr != nil {
 				return adminReply{}, acceptErr

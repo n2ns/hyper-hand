@@ -74,3 +74,37 @@ func TestStatusDoesNotInterruptBusyAgent(t *testing.T) {
 		t.Fatalf("idle status: %s", resultText(r))
 	}
 }
+
+func TestExecElevationTimeout(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	b := &windowMCPBackend{
+		find: func(string) (hyperv.VM, error) { return hyperv.VM{ID: "A", Name: "A", State: "Running"}, nil },
+		respond: func(_ string, req proto.Request) (any, error) {
+			switch req.Op {
+			case proto.OpExec:
+				// as an agent sends it when the UAC prompt was not answered before timeout_ms
+				return map[string]any{"exit_code": -1, "stdout": "", "stderr": "", "timed_out": true, "elevation_pending": true}, nil
+			case proto.OpPing:
+				return proto.PingResult{Version: "test", Protocol: proto.Protocol}, nil
+			default:
+				return nil, fmt.Errorf("unexpected op %s", req.Op)
+			}
+		},
+	}
+	cs := connectWindowMCP(t, ctx, b)
+	for _, tc := range []struct{ in, want int }{{5000, 5000}, {-1, 60000}} {
+		r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_exec", Arguments: map[string]any{"vm": "A", "command": "test", "admin": true, "timeout_ms": tc.in}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var e struct {
+			Error, Reason, Next string
+			TimeoutMs           int `json:"timeout_ms"`
+		}
+		if !r.IsError || json.Unmarshal([]byte(resultText(r)), &e) != nil || e.Error != "elevation_timeout" || e.TimeoutMs != tc.want ||
+			!strings.Contains(e.Reason, "did not run") || !strings.Contains(e.Next, "ConsentPromptBehaviorAdmin") || !strings.Contains(e.Next, "background: true") || !strings.Contains(e.Next, "vm_key alt+y") {
+			t.Fatalf("timeout_ms %d: %s", tc.in, resultText(r))
+		}
+	}
+}

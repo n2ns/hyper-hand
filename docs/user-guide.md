@@ -258,7 +258,7 @@ The settings window shows the error as the server status, the tray icon's toolti
 
 ### `admin` exec hangs or times out
 
-The elevation is waiting for a UAC consent prompt in the guest. Set `ConsentPromptBehaviorAdmin` to `0` as described in [Allow `admin` exec without a prompt](#allow-admin-exec-without-a-prompt). Commands still pending at the timeout are terminated.
+The elevation is waiting for a UAC consent prompt in the guest; if nobody answers it in time, the call fails with `elevation_timeout` and the command does not run. Set `ConsentPromptBehaviorAdmin` to `0` as described in [Allow `admin` exec without a prompt](#allow-admin-exec-without-a-prompt). Commands still pending at the timeout are terminated.
 
 ### The host service is unavailable
 

@@ -21,7 +21,7 @@ var Version = "dev"
 
 // Protocol is the wire protocol generation. The host refuses an agent whose ping reports a lower Protocol with the
 // error code agent_outdated; there is no compatibility path for older agents.
-const Protocol = 4
+const Protocol = 5
 
 const (
 	OpPing         = "ping"          // -> PingResult
@@ -72,8 +72,8 @@ type PingResult struct {
 	User      string `json:"user"`
 }
 
-// ExecArgs: Shell is "powershell" (default) or "cmd"; TimeoutMs 0 means 60 s. Admin runs it elevated (the VM's UAC is
-// set to elevate administrators without prompting).
+// ExecArgs: Shell is "powershell" (default) or "cmd"; TimeoutMs 0 means 60 s. Admin runs it elevated; a UAC prompt in
+// the guest is waited for within the timeout.
 type ExecArgs struct {
 	Command   string `json:"command"`
 	Shell     string `json:"shell,omitempty"`
@@ -87,6 +87,9 @@ type ExecResult struct {
 	Stdout   string `json:"stdout"`
 	Stderr   string `json:"stderr"`
 	TimedOut bool   `json:"timed_out"`
+	// ElevationPending: with Admin, the timeout came before the elevated worker received the command (a UAC prompt
+	// was not answered, or the timeout was too short to elevate), so the command did not run. TimedOut is then true.
+	ElevationPending bool `json:"elevation_pending,omitempty"`
 }
 
 type DirEntry struct {

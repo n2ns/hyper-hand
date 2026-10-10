@@ -21,7 +21,7 @@ uint32 header length | uint64 payload length | header JSON | payload bytes
 | Op | Args | Result / payload |
 |---|---|---|
 | `ping` | none | `{version, protocol, hostname, user}`; `protocol` is the generation the agent speaks (see 8.6) |
-| `exec` | `{command, shell, cwd, timeout_ms, admin}` | `{exit_code, stdout, stderr, timed_out}` |
+| `exec` | `{command, shell, cwd, timeout_ms, admin}` | `{exit_code, stdout, stderr, timed_out, elevation_pending}`; `elevation_pending` (omitted when false): with `admin`, the timeout came before the elevated worker received the command, so it did not run (see 5.5) |
 | `job_start` | `{command, shell, cwd, timeout_ms}` | `{id, pid, command, shell, cwd, state, exit_code, started_at, ended_at, elapsed_ms, timeout_ms, stdout_bytes, stderr_bytes, stdout_dropped, stderr_dropped}`; starts a background job (5.7); `admin` is refused |
 | `job_read` | `{id, stdout_offset, stderr_offset, max_bytes}` | the job's fields plus `{stdout, stderr, stdout_next, stderr_next}`; error `no such job "<id>": ...` for an unknown ID |
 | `job_cancel` | `{id}` | the job's fields after its shell exited; terminates its Job Object |

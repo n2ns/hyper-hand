@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `vm_exec` with `admin: true` whose `timeout_ms` passes before elevation completes (an unanswered UAC prompt) now fails with `elevation_timeout` (the command did not run; `next` says how to elevate without a prompt or answer it from the host) instead of returning `timed_out: true` with empty output, which looked like a command that ran too long. The guest protocol changes: run `vm_update_agent` on every VM.
 - Documentation: `README.md` is rewritten for human readers (what HyperHand is for, quick start with example requests, limitations, privacy); the tool list moves to the user guide, and building, testing, development installs and releasing move to the new `docs/building.md`.
 - New icon for `hyperhand.exe`, its tray icon, the settings window and `hyperhand-agent.exe`: a white monitor outline on a blue rounded square, replacing the gripper icon.
 - Success results that need a follow-up call carry `next`: a `vm_push` mirror plan (`status: "planned"`) says that nothing was written yet and names the apply call (`phase: "apply"`, its `plan_id`, the same paths, `force` and `task_id`, before `expires_at`); a background `vm_exec` names the `vm_job` call with its `job_id`. Callers had stopped after the plan, believing the mirror done.

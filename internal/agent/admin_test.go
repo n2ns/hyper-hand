@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -44,7 +45,7 @@ func TestAdminPendingElevation(t *testing.T) {
 				if !errors.Is(err, context.Canceled) {
 					t.Fatalf("cancel: %v", err)
 				}
-			} else if err != nil || !result.(proto.ExecResult).TimedOut {
+			} else if err != nil || !result.(proto.ExecResult).TimedOut || !elevationPending(t, result) {
 				t.Fatalf("timeout: result=%+v err=%v", result, err)
 			}
 			// A late approval gets no command: the single-use listener is gone.
@@ -252,7 +253,7 @@ func TestAdminExecutionDeadlineIncludesElevation(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := result.(proto.ExecResult)
-	if !r.TimedOut || !strings.Contains(r.Stdout, "started") {
+	if !r.TimedOut || !strings.Contains(r.Stdout, "started") || elevationPending(t, r) {
 		t.Fatalf("result: %+v", r)
 	}
 	if elapsed := time.Since(start); elapsed > 2100*time.Millisecond {
@@ -305,4 +306,20 @@ func TestExpiredExecDoesNotStart(t *testing.T) {
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("expired command executed: %v", err)
 	}
+}
+
+// elevationPending reads elevation_pending from the result as the host receives it.
+func elevationPending(t *testing.T, result any) bool {
+	t.Helper()
+	b, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var r struct {
+		ElevationPending bool `json:"elevation_pending"`
+	}
+	if err := json.Unmarshal(b, &r); err != nil {
+		t.Fatal(err)
+	}
+	return r.ElevationPending
 }
