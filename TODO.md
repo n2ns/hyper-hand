@@ -70,6 +70,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 ## 6. Completed capabilities to keep out of the backlog
 
 - [x] Window groups, target integrity checks, structured tool results/errors, observation IDs and freshness checks.
+- [x] Required `vm` on every tool except `vm_list` (no default VM; `all_temp` needs `vm`), so a call meant for a VM that is off never reaches another one. Installed-host acceptance with `Win10` and `Win10-Example`: see the [acceptance record](docs/vm-required-acceptance-20261010.md).
 - [x] UIA semantic actions, state readback and four-direction semantic scrolling; custom-provider coverage remains bounded by the acceptance records.
 - [x] UI condition waits and assertions: six window/control kinds, exact enabled/value/state matching, one-shot checks, timeout/cancellation, unknown-state protection and concurrent actions. See the [wait contract](docs/features.md#73-vm_wait).
 - [x] Control search and subtree observation: bounded exact property search, explicit unique/multiple/not-found/incomplete results, subtree diff isolation and direct use of returned identities by actions and waits. Installed Win10 acceptance covered a 2234-node fixture and the real AutoCAD Options tab/Cancel workflow. See the [search contract](docs/features.md#control-search-and-subtree-observation) and [acceptance record](docs/control-search-acceptance-20261010.md).
