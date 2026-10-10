@@ -1,4 +1,4 @@
-# Draws hyperhand.ico, the H-on-a-screen icon of hyperhand.exe, its tray icon and settings window (Pillow), and preview.png.
+# Draws hyperhand.ico, the screen icon of hyperhand.exe, its tray icon and settings window (Pillow), and preview.png.
 # Sizes 256 and 48 are drawn large and scaled down; 32, 24 and 16 are placed pixel by pixel.
 # Regenerate the resources afterwards, in cmd/hyperhand: go-winres make --in winres/winres.json --arch amd64
 
@@ -28,20 +28,14 @@ def big():
     d.rounded_rectangle((160, 180, 864, 670), radius=35, fill=0)
     d.rectangle((454, 740, 570, 830), fill=255)                      # stand
     d.rounded_rectangle((300, 820, 724, 890), radius=35, fill=255)
-    d.rounded_rectangle((317, 238, 434, 612), radius=18, fill=255)   # H
-    d.rounded_rectangle((590, 238, 707, 612), radius=18, fill=255)
-    d.rectangle((432, 378, 592, 472), fill=255)
     img.paste(Image.new("RGBA", (S, S), W), (0, 0), mask)
     return img
 
 def pixel(n):
-    # white rectangles (x0, y0, x1, y1), inclusive: frame, inside punched out, H, neck, base
-    rects = {16: [(1, 2, 14, 11, W), (2, 3, 13, 10, B), (4, 4, 5, 9, W), (10, 4, 11, 9, W), (6, 6, 9, 7, W),
-                  (7, 12, 8, 12, W), (4, 13, 11, 13, W)],
-             24: [(2, 2, 21, 16, W), (4, 4, 19, 14, B), (6, 5, 8, 13, W), (15, 5, 17, 13, W), (9, 8, 14, 10, W),
-                  (11, 17, 12, 18, W), (6, 19, 17, 20, W)],
-             32: [(2, 3, 29, 22, W), (4, 5, 27, 20, B), (9, 7, 11, 18, W), (20, 7, 22, 18, W), (12, 12, 19, 13, W),
-                  (15, 23, 16, 25, W), (9, 26, 22, 27, W)]}[n]
+    # white rectangles (x0, y0, x1, y1), inclusive: frame, inside punched out, neck, base
+    rects = {16: [(1, 2, 14, 11, W), (2, 3, 13, 10, B), (7, 12, 8, 12, W), (4, 13, 11, 13, W)],
+             24: [(2, 2, 21, 16, W), (4, 4, 19, 14, B), (11, 17, 12, 18, W), (6, 19, 17, 20, W)],
+             32: [(2, 3, 29, 22, W), (4, 5, 27, 20, B), (15, 23, 16, 25, W), (9, 26, 22, 27, W)]}[n]
     img = background(n, 0, {16: 3, 24: 4, 32: 6}[n])
     bg = img.copy()
     for x0, y0, x1, y1, c in rects:
