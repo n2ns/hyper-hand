@@ -75,7 +75,7 @@ func TestControlSearchMCPStatusAndSelectors(t *testing.T) {
 			})
 			cs := connectWindowMCP(t, ctx, b)
 			var out map[string]any
-			callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"handle": 10, "pid": 100, "automation_id": "cmdline", "control_name": "Command", "control_type": "Edit"}, &out)
+			callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "handle": 10, "pid": 100, "automation_id": "cmdline", "control_name": "Command", "control_type": "Edit"}, &out)
 			matches, ok := out["matches"].([]any)
 			if !ok || len(matches) != tc.count || out["status"] != tc.status || out["observation_id"] == "" || out["visited"] != float64(1001) || out["truncated"] != tc.truncated {
 				t.Fatalf("search status: %v", out)
@@ -163,25 +163,25 @@ func TestControlSearchMCPReferencesWorkForWaitSubtreeAndAction(t *testing.T) {
 	})
 	cs := connectWindowMCP(t, ctx, b)
 	var found map[string]any
-	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"task_id": "owner", "handle": 10, "automation_id": "cmdline"}, &found)
+	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "task_id": "owner", "handle": 10, "automation_id": "cmdline"}, &found)
 	id := found["observation_id"]
 	var waited map[string]any
-	callJSON(t, ctx, cs, "vm_wait", map[string]any{"task_id": "owner", "kind": "control_matches", "observation_id": id, "index": 0, "value": "LINE", "check_only": true}, &waited)
+	callJSON(t, ctx, cs, "vm_wait", map[string]any{"vm": "A", "task_id": "owner", "kind": "control_matches", "observation_id": id, "index": 0, "value": "LINE", "check_only": true}, &waited)
 	if waited["satisfied"] != true {
 		t.Fatalf("found control cannot be waited on: %v", waited)
 	}
 	var nested map[string]any
-	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"task_id": "owner", "observation_id": id, "index": 0, "control_type": "Edit"}, &nested)
-	subtree, _, _ := observe(t, ctx, cs, map[string]any{"task_id": "owner", "observation_id": id, "index": 0, "screenshot": false})
+	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "task_id": "owner", "observation_id": id, "index": 0, "control_type": "Edit"}, &nested)
+	subtree, _, _ := observe(t, ctx, cs, map[string]any{"vm": "A", "task_id": "owner", "observation_id": id, "index": 0, "screenshot": false})
 	if !strings.Contains(fmt.Sprint(subtree["controls"]), "[0] Edit") {
 		t.Fatalf("subtree not rooted at selected control: %v", subtree)
 	}
-	callJSON(t, ctx, cs, "vm_wait", map[string]any{"task_id": "owner", "kind": "control_exists", "observation_id": subtree["observation_id"], "index": 0, "check_only": true}, &waited)
+	callJSON(t, ctx, cs, "vm_wait", map[string]any{"vm": "A", "task_id": "owner", "kind": "control_exists", "observation_id": subtree["observation_id"], "index": 0, "check_only": true}, &waited)
 	if waited["satisfied"] != true {
 		t.Fatalf("subtree reference cannot be waited on: %v", waited)
 	}
 	var changed map[string]any
-	callJSON(t, ctx, cs, "vm_set_value", map[string]any{"task_id": "owner", "observation_id": id, "index": 0, "value": "CIRCLE", "observe_after": "none"}, &changed)
+	callJSON(t, ctx, cs, "vm_set_value", map[string]any{"vm": "A", "task_id": "owner", "observation_id": id, "index": 0, "value": "CIRCLE", "observe_after": "none"}, &changed)
 	if changed["ok"] != true || scoped.Load() < 3 || actions.Load() != 1 {
 		t.Fatalf("reference integration: %v scoped=%d actions=%d", changed, scoped.Load(), actions.Load())
 	}
@@ -238,7 +238,7 @@ func TestControlSearchMCPWindowReuseDuringRead(t *testing.T) {
 		return respond(vm, req)
 	}
 	cs := connectWindowMCP(t, ctx, b)
-	out := callRefused(t, ctx, cs, "vm_find_controls", map[string]any{"handle": 10, "control_type": "Edit"})
+	out := callRefused(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "handle": 10, "control_type": "Edit"})
 	if out["error"] != codeStaleObservation || out["observation_id"] != nil {
 		t.Fatalf("window reused during search accepted: %v", out)
 	}
@@ -265,20 +265,20 @@ func TestControlSearchMCPDiffScopeIsolation(t *testing.T) {
 		return nil, fmt.Errorf("unexpected operation %s", req.Op)
 	}))
 	var found map[string]any
-	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"handle": 10, "control_type": "Edit"}, &found)
+	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "handle": 10, "control_type": "Edit"}, &found)
 	id := found["observation_id"]
-	first, _, _ := observe(t, ctx, cs, map[string]any{"observation_id": id, "index": 0, "screenshot": false})
+	first, _, _ := observe(t, ctx, cs, map[string]any{"vm": "A", "observation_id": id, "index": 0, "screenshot": false})
 	for _, args := range []map[string]any{
-		{"handle": 10, "diff_from": id, "screenshot": false},
-		{"handle": 10, "diff_from": first["observation_id"], "screenshot": false},
-		{"observation_id": id, "index": 1, "diff_from": first["observation_id"], "screenshot": false},
+		{"vm": "A", "handle": 10, "diff_from": id, "screenshot": false},
+		{"vm": "A", "handle": 10, "diff_from": first["observation_id"], "screenshot": false},
+		{"vm": "A", "observation_id": id, "index": 1, "diff_from": first["observation_id"], "screenshot": false},
 	} {
 		out, _, _ := observe(t, ctx, cs, args)
 		if out["controls_diff"] != nil || out["controls"] == nil || !strings.Contains(fmt.Sprint(out["stale_risk"]), "diff_from ignored") {
 			t.Fatalf("cross-scope diff accepted: %v", out)
 		}
 	}
-	same, _, _ := observe(t, ctx, cs, map[string]any{"observation_id": id, "index": 0, "diff_from": first["observation_id"], "screenshot": false})
+	same, _, _ := observe(t, ctx, cs, map[string]any{"vm": "A", "observation_id": id, "index": 0, "diff_from": first["observation_id"], "screenshot": false})
 	if same["controls_diff"] == nil || same["controls"] != nil {
 		t.Fatalf("same-scope diff refused: %v", same)
 	}
@@ -307,8 +307,8 @@ func TestControlSearchMCPDirectWaitDistinguishesGoneFromUnknown(t *testing.T) {
 				return nil, fmt.Errorf("unexpected operation %s", req.Op)
 			}))
 			var found map[string]any
-			callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"handle": 10, "control_type": "Edit"}, &found)
-			args := map[string]any{"kind": "control_gone", "observation_id": found["observation_id"], "index": 0, "check_only": true}
+			callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "handle": 10, "control_type": "Edit"}, &found)
+			args := map[string]any{"vm": "A", "kind": "control_gone", "observation_id": found["observation_id"], "index": 0, "check_only": true}
 			if tc.gone {
 				var out map[string]any
 				callJSON(t, ctx, cs, "vm_wait", args, &out)
@@ -349,7 +349,7 @@ func TestControlSearchMCPRejectsSessionChange(t *testing.T) {
 		return respond(vm, req)
 	}
 	cs := connectWindowMCP(t, ctx, b)
-	out := callRefused(t, ctx, cs, "vm_find_controls", map[string]any{"handle": 10, "control_type": "Edit"})
+	out := callRefused(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "handle": 10, "control_type": "Edit"})
 	if out["error"] != codeSessionUnusable || out["observation_id"] != nil {
 		t.Fatalf("session changed during search accepted: %v", out)
 	}
@@ -395,8 +395,8 @@ func TestControlSearchMCPGoneReadRechecksSession(t *testing.T) {
 	}
 	cs := connectWindowMCP(t, ctx, b)
 	var found map[string]any
-	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"handle": 10, "control_type": "Edit"}, &found)
-	out := callRefused(t, ctx, cs, "vm_wait", map[string]any{"kind": "control_gone", "observation_id": found["observation_id"], "index": 0, "check_only": true})
+	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "handle": 10, "control_type": "Edit"}, &found)
+	out := callRefused(t, ctx, cs, "vm_wait", map[string]any{"vm": "A", "kind": "control_gone", "observation_id": found["observation_id"], "index": 0, "check_only": true})
 	if out["error"] != codeSessionUnusable || out["satisfied"] == true {
 		t.Fatalf("locked session mistaken for gone control: %v", out)
 	}
@@ -414,14 +414,14 @@ func TestControlSearchMCPOldAgentFailsClosed(t *testing.T) {
 	})
 	cs := connectWindowMCP(t, ctx, b)
 	var found map[string]any
-	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"handle": 10, "control_type": "Edit"}, &found)
+	callJSON(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "handle": 10, "control_type": "Edit"}, &found)
 	outdated.Store(true)
 	for _, tc := range []struct {
 		tool string
 		args map[string]any
 	}{
-		{"vm_find_controls", map[string]any{"handle": 10, "control_type": "Edit"}},
-		{"vm_observe", map[string]any{"observation_id": found["observation_id"], "index": 0, "screenshot": false}},
+		{"vm_find_controls", map[string]any{"vm": "A", "handle": 10, "control_type": "Edit"}},
+		{"vm_observe", map[string]any{"vm": "A", "observation_id": found["observation_id"], "index": 0, "screenshot": false}},
 	} {
 		out := callRefused(t, ctx, cs, tc.tool, tc.args)
 		if out["error"] != codeAgentOutdated || out["next"] != "call vm_update_agent" {

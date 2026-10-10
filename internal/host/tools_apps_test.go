@@ -59,7 +59,7 @@ func TestAppsRegisteredSchema(t *testing.T) {
 		if err := json.Unmarshal(b, &schema); err != nil {
 			t.Fatal(err)
 		}
-		if len(schema.Required) != 0 || len(schema.Properties) != 4 || schema.Properties["task_id"].Type != "string" || schema.Properties["vm"].Type != "string" || schema.Properties["query"].Type != "string" || schema.Properties["limit"].Type != "integer" {
+		if !reflect.DeepEqual(schema.Required, []string{"vm"}) || len(schema.Properties) != 4 || schema.Properties["task_id"].Type != "string" || schema.Properties["vm"].Type != "string" || schema.Properties["query"].Type != "string" || schema.Properties["limit"].Type != "integer" {
 			t.Fatalf("schema: %s", b)
 		}
 		return
@@ -99,7 +99,7 @@ func TestAppsLimitsAndEmptyResult(t *testing.T) {
 	f := &fakeCall{results: map[string]any{proto.OpListApps: proto.ListAppsResult{Apps: []proto.AppInfo{}, Warnings: []string{}}}}
 	cs := connectAppsMCP(t, ctx, f.call)
 	for _, limit := range []int{-1, 201} {
-		out := callRefused(t, ctx, cs, "vm_apps", map[string]any{"limit": limit})
+		out := callRefused(t, ctx, cs, "vm_apps", map[string]any{"vm": "A", "limit": limit})
 		if out["error"] != codeInvalidArgument || out["next"] == "" {
 			t.Errorf("limit %d: %v", limit, out)
 		}
@@ -107,7 +107,7 @@ func TestAppsLimitsAndEmptyResult(t *testing.T) {
 	if len(f.ops) != 0 {
 		t.Fatal("invalid limits reached agent")
 	}
-	for _, input := range []map[string]any{nil, {"limit": 0}, {"limit": 1}, {"limit": 200}} {
+	for _, input := range []map[string]any{{"vm": "A"}, {"vm": "A", "limit": 0}, {"vm": "A", "limit": 1}, {"vm": "A", "limit": 200}} {
 		var out map[string]any
 		callJSON(t, ctx, cs, "vm_apps", input, &out)
 		apps, appsOK := out["apps"].([]any)
@@ -141,7 +141,7 @@ func TestAppsErrors(t *testing.T) {
 			defer cancel()
 			f := &fakeCall{errs: map[string]error{proto.OpListApps: tt.err}}
 			cs := connectAppsMCP(t, ctx, f.call)
-			out := callRefused(t, ctx, cs, "vm_apps", nil)
+			out := callRefused(t, ctx, cs, "vm_apps", map[string]any{"vm": "A"})
 			reason := tt.err.Error()
 			var te *toolError
 			if errors.As(tt.err, &te) {

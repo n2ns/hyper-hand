@@ -324,13 +324,22 @@ func TestEndTurnAllTemp(t *testing.T) {
 	if len(cps.Checkpoints) != 3 || cps.Checkpoints[0].Type != "manual" || cps.Checkpoints[1].Type != "keep" {
 		t.Errorf("after all_temp %s", jsonString(cps))
 	}
-	// Without vm every VM is listed (the fake shares one tree, so the second VM finds the temp already gone).
+	// Without vm, all_temp is refused: it would sweep every VM. Nothing is deleted.
 	b.mu.Lock()
 	b.tree.Checkpoints = append(b.tree.Checkpoints, hyperv.Checkpoint{ID: "id-5", Name: "run-20261009-2200-aaaa-temp-z", ParentID: "id-1"})
+	deletedBefore := len(b.deleted)
 	b.mu.Unlock()
-	callJSON(t, ctx, cs, "vm_end_turn", map[string]any{"all_temp": true}, &out)
-	if !reflect.DeepEqual(out.DeletedCheckpoints, []string{"run-20261009-2200-aaaa-temp-z"}) || len(out.Skipped) != 2 || len(out.Errors) != 0 {
-		t.Errorf("all VMs %s", jsonString(out))
+	if refused := callRefused(t, ctx, cs, "vm_end_turn", map[string]any{"all_temp": true}); refused["error"] != codeInvalidArgument {
+		t.Errorf("all_temp without vm: %v", refused)
+	}
+	b.mu.Lock()
+	if len(b.deleted) != deletedBefore {
+		t.Errorf("all_temp without vm deleted %v", b.deleted[deletedBefore:])
+	}
+	b.mu.Unlock()
+	callJSON(t, ctx, cs, "vm_end_turn", map[string]any{"vm": "Win10", "all_temp": true}, &out)
+	if !reflect.DeepEqual(out.DeletedCheckpoints, []string{"run-20261009-2200-aaaa-temp-z"}) || len(out.Skipped) != 1 || len(out.Errors) != 0 {
+		t.Errorf("all_temp on Win10 %s", jsonString(out))
 	}
 	if !reflect.DeepEqual(b.deleted, []string{"Win10/id-2", "Win10/id-3", "Win10/id-5"}) {
 		t.Errorf("deleted %v", b.deleted)

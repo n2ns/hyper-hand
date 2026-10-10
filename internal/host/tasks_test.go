@@ -164,7 +164,7 @@ func TestTaskCheckpointCleanupIsolationAndFailure(t *testing.T) {
 	callJSON(t, ctx, cs, "vm_checkpoint", map[string]any{"task_id": "a", "vm": "CAD", "label": "a"}, &ca)
 	callJSON(t, ctx, cs, "vm_checkpoint", map[string]any{"task_id": "b", "vm": "Other", "label": "b"}, &cb)
 	var out endTurnOut
-	refused := callRefused(t, ctx, cs, "vm_end_turn", map[string]any{"task_id": "a", "all_temp": true})
+	refused := callRefused(t, ctx, cs, "vm_end_turn", map[string]any{"task_id": "a", "vm": "Other", "all_temp": true})
 	if refused["error"] != "vm_busy" || len(b.deleted) != 0 {
 		t.Fatalf("all_temp touched another task: %v %v", refused, b.deleted)
 	}

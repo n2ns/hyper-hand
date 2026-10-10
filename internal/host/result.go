@@ -289,6 +289,7 @@ func vmRequired(d *deps, tool string, raw json.RawMessage, vm string) error {
 			}
 		}
 	}
+	allTemp := false
 	if tool == "vm_end_turn" {
 		var in struct {
 			AllTemp bool `json:"all_temp"`
@@ -296,8 +297,9 @@ func vmRequired(d *deps, tool string, raw json.RawMessage, vm string) error {
 		if len(raw) > 0 {
 			_ = json.Unmarshal(raw, &in)
 		}
+		allTemp = in.AllTemp
 		// "" (or no vm) ends the whole task; a blank name is a mistake, not a request to end everything.
-		if !in.AllTemp && vm == "" {
+		if !allTemp && vm == "" {
 			return nil
 		}
 	}
@@ -307,10 +309,11 @@ func vmRequired(d *deps, tool string, raw json.RawMessage, vm string) error {
 		next = fmt.Sprintf("pass vm with one of: %s", strings.Join(names, ", "))
 	}
 	what := "vm is required: there is no default VM"
-	if tool == "vm_end_turn" && vm != "" {
-		what = "vm must not be blank: omit it to end the whole task, or pass a VM name"
-	} else if tool == "vm_end_turn" {
+	switch {
+	case tool == "vm_end_turn" && allTemp:
 		what = "vm is required with all_temp: it would otherwise delete temporary checkpoints on every VM"
+	case tool == "vm_end_turn":
+		what = "vm must not be blank: omit it to end the whole task, or pass a VM name"
 	}
 	return refuse(codeInvalidArgument, next, map[string]any{"vms": names}, "%s", what)
 }
