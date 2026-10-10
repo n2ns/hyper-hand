@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/go-ole/go-ole/oleutil"
 	"golang.org/x/sys/windows"
@@ -115,9 +116,7 @@ func devInstall(args []string, out io.Writer) error {
 	}
 
 	previous := run.lastRun
-	for time.Now().Before(previous.Add(2 * time.Second)) { // LastRunTime has a resolution of seconds
-		time.Sleep(250 * time.Millisecond)
-	}
+	time.Sleep(runGap(previous, time.Now()))
 	if err := ts.run(devInstallTask); err != nil {
 		return err
 	}
@@ -229,6 +228,20 @@ type taskRun struct {
 
 func taskBusy(state int64) bool { return state == taskStateQueued || state == taskStateRunning }
 
+// runGap is how long to wait before starting the task so that the new run's LastRunTime (a resolution of seconds)
+// differs from previous: at most 2 seconds. LastRunTime comes back from COM as a local time labelled UTC, so it can
+// look hours away from time.Now(); without the bound a past run could look like one in the future and block for hours.
+func runGap(previous, now time.Time) time.Duration {
+	d := previous.Add(2 * time.Second).Sub(now)
+	if d < 0 {
+		return 0
+	}
+	if d > 2*time.Second {
+		return 2 * time.Second
+	}
+	return d
+}
+
 // taskRunDone reports whether a run newer than previous has completed.
 func taskRunDone(previous time.Time, run taskRun) bool {
 	return !run.lastRun.Equal(previous) && !taskBusy(run.state)
@@ -329,15 +342,29 @@ func serviceRunning(name string) (bool, error) {
 }
 
 // processIDs lists the processes other than this one running the executable exe.
+// processIDs lists this user's processes running exe. dev-install runs unelevated, so it cannot open the service's
+// process (another account, same executable); processes it cannot open are not the tray and are skipped.
 func processIDs(exe string) ([]uint32, error) {
-	hs, err := openProcessesWithPath(0, exe)
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil, err
 	}
+	defer windows.CloseHandle(snap)
+	name := strings.ToLower(filepath.Base(exe))
 	var pids []uint32
-	for _, h := range hs {
-		if pid, err := windows.GetProcessId(h); err == nil {
-			pids = append(pids, pid)
+	e := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
+	for err = windows.Process32First(snap, &e); err == nil; err = windows.Process32Next(snap, &e) {
+		if strings.ToLower(windows.UTF16ToString(e.ExeFile[:])) != name {
+			continue
+		}
+		h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, e.ProcessID)
+		if err != nil {
+			continue // exited, or another account's process (the service)
+		}
+		buf := make([]uint16, windows.MAX_LONG_PATH)
+		n := uint32(len(buf))
+		if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) == nil && strings.EqualFold(windows.UTF16ToString(buf[:n]), exe) {
+			pids = append(pids, e.ProcessID)
 		}
 		windows.CloseHandle(h)
 	}

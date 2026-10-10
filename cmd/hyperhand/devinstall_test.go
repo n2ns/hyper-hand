@@ -114,3 +114,23 @@ func TestDevInstallRefusesOutsideRepository(t *testing.T) {
 		t.Fatalf("extra argument: %v", err)
 	}
 }
+
+// A past run that COM reports as a local time labelled UTC can look hours in the future (UTC+7 host: 01:16 local read
+// as 01:16 UTC); dev-install then waited for hours before starting the task (2026-10-11). The gap is at most 2 s.
+func TestRunGapIsBounded(t *testing.T) {
+	now := time.Date(2026, 10, 10, 19, 4, 0, 0, time.UTC)
+	cases := []struct {
+		previous time.Time
+		want     time.Duration
+	}{
+		{now.Add(7 * time.Hour), 2 * time.Second},                   // skewed "future" run
+		{now.Add(-time.Hour), 0},                                    // long ago
+		{now.Add(-500 * time.Millisecond), 1500 * time.Millisecond}, // within the same second
+		{time.Time{}, 0},                                            // never run
+	}
+	for _, c := range cases {
+		if got := runGap(c.previous, now); got != c.want {
+			t.Errorf("runGap(%v) = %v, want %v", c.previous, got, c.want)
+		}
+	}
+}
