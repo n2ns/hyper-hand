@@ -223,7 +223,7 @@ func inputMCP(t *testing.T, windows func(n int32) []proto.WindowInfo) (*mcp.Clie
 func TestKeyAndTypeGroupTarget(t *testing.T) {
 	// vm_key with the main window selector while the command line is foreground: sent, and the command line reported.
 	cs, log, ctx := inputMCP(t, func(int32) []proto.WindowInfo { return groupWindows(21) })
-	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_key", Arguments: map[string]any{"handle": 20, "pid": 100, "sequence": []string{"a", "enter"}}})
+	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_key", Arguments: map[string]any{"vm": "A", "handle": 20, "pid": 100, "sequence": []string{"a", "enter"}}})
 	if err != nil || r.IsError || strings.Join(*log, ",") != "press a,press enter" {
 		t.Fatalf("vm_key: %v %v %v", r, err, *log)
 	}
@@ -237,7 +237,7 @@ func TestKeyAndTypeGroupTarget(t *testing.T) {
 		}
 		return groupWindows(21)
 	})
-	r, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_key", Arguments: map[string]any{"handle": 20, "pid": 100, "sequence": []string{"a", "enter"}}})
+	r, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_key", Arguments: map[string]any{"vm": "A", "handle": 20, "pid": 100, "sequence": []string{"a", "enter"}}})
 	if err != nil || !r.IsError || strings.Join(*log, ",") != "press a" {
 		t.Fatalf("vm_key left group: %v %v %v", r, err, *log)
 	}
@@ -246,7 +246,7 @@ func TestKeyAndTypeGroupTarget(t *testing.T) {
 	}
 	// vm_type with the main window selector goes to the command line through the agent.
 	cs, log, ctx = inputMCP(t, func(int32) []proto.WindowInfo { return groupWindows(21) })
-	r, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_type", Arguments: map[string]any{"handle": 20, "pid": 100, "text": "(+ 1 2)"}})
+	r, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_type", Arguments: map[string]any{"vm": "A", "handle": 20, "pid": 100, "text": "(+ 1 2)"}})
 	if err != nil || r.IsError || strings.Join(*log, ",") != "type_keys 21" {
 		t.Fatalf("type: %v %v %v", r, err, *log)
 	}

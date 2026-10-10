@@ -94,7 +94,7 @@ func TestWindowMCPRawClick(t *testing.T) {
 		},
 	}
 	cs := connectWindowMCP(t, ctx, b)
-	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_click", Arguments: map[string]any{"x": 101, "y": 52, "button": "middle", "observe_after": "none"}})
+	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_click", Arguments: map[string]any{"vm": "CAD", "x": 101, "y": 52, "button": "middle", "observe_after": "none"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,16 +106,17 @@ func TestWindowMCPRawClick(t *testing.T) {
 	}
 }
 
-// Every agent check and the final input of one action go to the VM resolved once at the start, even when the default
-// VM changes meanwhile.
+// Without vm an action is refused before anything runs: no VM lookup (default or named), no agent call, no input. With
+// vm every agent check and the final input go to that VM, and no default is ever resolved.
 func TestWindowMCPActionsPinVM(t *testing.T) {
 	for _, tool := range []string{"vm_type", "vm_key"} {
 		t.Run(tool, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			var defaultFinds, actions atomic.Int32
+			var finds, defaultFinds, actions atomic.Int32
 			b := &inputMCPBackend{windowMCPBackend: &windowMCPBackend{
 				find: func(name string) (hyperv.VM, error) {
+					finds.Add(1)
 					id := name
 					if name == "" {
 						id = "A"
@@ -157,10 +158,21 @@ func TestWindowMCPActionsPinVM(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if m := resultJSON(t, r); !r.IsError || m["error"] != codeInvalidArgument || m["vms"] == nil {
+				t.Fatalf("%s without vm: %s", tool, resultText(r))
+			}
+			if finds.Load() != 0 || actions.Load() != 0 {
+				t.Fatalf("refused call had side effects: finds=%d actions=%d", finds.Load(), actions.Load())
+			}
+			args["vm"] = "A"
+			r, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+			if err != nil {
+				t.Fatal(err)
+			}
 			if r.IsError {
 				t.Fatalf("%s: %s", tool, resultText(r))
 			}
-			if defaultFinds.Load() != 1 || actions.Load() != 1 {
+			if defaultFinds.Load() != 0 || actions.Load() != 1 {
 				t.Errorf("default resolutions=%d actions=%d", defaultFinds.Load(), actions.Load())
 			}
 		})

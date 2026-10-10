@@ -44,7 +44,7 @@ func TestUIWaitMCPCheckAndAssert(t *testing.T) {
 		return observeControls(), nil
 	}))
 	for _, assertion := range []bool{false, true} {
-		args := map[string]any{"kind": "control_matches", "handle": 10, "pid": 100, "automation_id": "cmdline", "enabled": true, "value": "CIRCLE", "check_only": true, "assert": assertion, "task_id": "check"}
+		args := map[string]any{"vm": "A", "kind": "control_matches", "handle": 10, "pid": 100, "automation_id": "cmdline", "enabled": true, "value": "CIRCLE", "check_only": true, "assert": assertion, "task_id": "check"}
 		r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_wait", Arguments: args})
 		if err != nil {
 			t.Fatal(err)
@@ -78,7 +78,7 @@ func TestUIWaitMCPUnknownCannotSatisfy(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			cs := connectWindowMCP(t, ctx, uiWaitMCPBackend(func() (proto.ControlsResult, error) { return tc.tree, nil }))
-			args := map[string]any{"kind": tc.kind, "handle": 10, "pid": 100, "automation_id": "target", "check_only": true}
+			args := map[string]any{"vm": "A", "kind": tc.kind, "handle": 10, "pid": 100, "automation_id": "target", "check_only": true}
 			for key, value := range tc.args {
 				args[key] = value
 			}
@@ -98,7 +98,7 @@ func TestUIWaitMCPAmbiguousSelector(t *testing.T) {
 	cs := connectWindowMCP(t, ctx, uiWaitMCPBackend(func() (proto.ControlsResult, error) {
 		return proto.ControlsResult{Nodes: []proto.ControlInfo{{Name: "Save", PID: 100, RuntimeID: "one"}, {Name: "Save", PID: 100, RuntimeID: "two"}}}, nil
 	}))
-	args := map[string]any{"kind": "control_exists", "handle": 10, "pid": 100, "control_name": "Save", "check_only": true}
+	args := map[string]any{"vm": "A", "kind": "control_exists", "handle": 10, "pid": 100, "control_name": "Save", "check_only": true}
 	out := callRefused(t, ctx, cs, "vm_wait", args)
 	if out["error"] != codeAmbiguousTarget {
 		t.Fatalf("ambiguous control: %v", out)
@@ -165,13 +165,22 @@ func TestUIWaitMCPPinsVMAndReleasesInput(t *testing.T) {
 		return nil
 	}
 	cs := connectWindowMCP(t, ctx, b)
+	// Without vm the wait is refused before anything runs: no default lookup, no sample.
+	waitArgs := map[string]any{"kind": "control_matches", "handle": 10, "pid": 100, "automation_id": "cmdline", "value": "after", "timeout_ms": 3000, "task_id": "worker"}
+	if refused := callRefused(t, ctx, cs, "vm_wait", waitArgs); refused["error"] != codeInvalidArgument || refused["vms"] == nil {
+		t.Fatalf("wait without vm: %v", refused)
+	}
+	if defaultFinds.Load() != 0 || samples.Load() != 0 {
+		t.Fatalf("refused wait had side effects: default lookups=%d samples=%d", defaultFinds.Load(), samples.Load())
+	}
+	waitArgs["vm"] = "A"
 	type outcome struct {
 		result *mcp.CallToolResult
 		err    error
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_wait", Arguments: map[string]any{"kind": "control_matches", "handle": 10, "pid": 100, "automation_id": "cmdline", "value": "after", "timeout_ms": 3000, "task_id": "worker"}})
+		r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_wait", Arguments: waitArgs})
 		done <- outcome{r, err}
 	}()
 	select {
@@ -192,7 +201,7 @@ func TestUIWaitMCPPinsVMAndReleasesInput(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("wait blocked concurrent input")
 	}
-	if defaultFinds.Load() != 1 || samples.Load() < 2 {
+	if defaultFinds.Load() != 0 || samples.Load() < 2 {
 		t.Fatalf("default lookups=%d samples=%d", defaultFinds.Load(), samples.Load())
 	}
 }
@@ -242,7 +251,7 @@ func TestUIWaitMCPProviderFailureIsNotConditionTimeout(t *testing.T) {
 				return observeControls(), nil
 			}))
 			for _, assertion := range []bool{false, true} {
-				r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_wait", Arguments: map[string]any{"kind": "control_gone", "handle": 10, "automation_id": "cmdline", "timeout_ms": 80, "assert": assertion}})
+				r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_wait", Arguments: map[string]any{"vm": "A", "kind": "control_gone", "handle": 10, "automation_id": "cmdline", "timeout_ms": 80, "assert": assertion}})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -269,14 +278,14 @@ func TestUIWaitMCPSamplingDeadlineReleasesConnection(t *testing.T) {
 		<-release
 		return proto.ControlsResult{}, nil
 	}))
-	out := callRefused(t, ctx, cs, "vm_wait", map[string]any{"kind": "control_gone", "handle": 10, "automation_id": "cmdline", "timeout_ms": 80, "assert": true})
+	out := callRefused(t, ctx, cs, "vm_wait", map[string]any{"vm": "A", "kind": "control_gone", "handle": 10, "automation_id": "cmdline", "timeout_ms": 80, "assert": true})
 	if out["error"] == "assertion_failed" || out["satisfied"] == true {
 		t.Fatalf("unfinished sample proved condition: %v", out)
 	}
 	unblock()
 	// The timed-out call must drop the busy connection so the next UI read can run.
 	var recovered map[string]any
-	callJSON(t, ctx, cs, "vm_wait", map[string]any{"kind": "window_exists", "handle": 10, "check_only": true}, &recovered)
+	callJSON(t, ctx, cs, "vm_wait", map[string]any{"vm": "A", "kind": "window_exists", "handle": 10, "check_only": true}, &recovered)
 	if recovered["satisfied"] != true {
 		t.Fatalf("connection did not recover: %v", recovered)
 	}
