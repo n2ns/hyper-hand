@@ -77,7 +77,7 @@ Every refusal and failure is returned as an MCP result with `isError: true` whos
 | Code | When |
 |---|---|
 | `failed` | Any error without a specific code: Hyper-V, WMI or PowerShell failures, transport errors, errors the agent answered with (for example a `vm_exec` start failure), and VM lookup failures in `vm_observe` and the actions (see 2.3) |
-| `invalid_argument` | A parameter is missing, out of range or inconsistent, including VM lookup failures of the VM, checkpoint, command, file, clipboard, wait, launch and agent tools; also an observation that cannot provide what the action needs (no screenshot for pixel coordinates, no control tree for `index`) and a pixel outside the observation image; for checkpoints (see 3.3) an invalid `label`, a VM whose checkpoint setting is `Disabled`, a `manual` checkpoint selected by `name` for deletion, and `vm_checkpoint_keep` on a `keep` or `manual` checkpoint |
+| `invalid_argument` | A parameter is missing, out of range or inconsistent, including a missing `vm` (reason `vm is required: there is no default VM`, field `vms` with the VM names, see 2.3) and VM lookup failures of the VM, checkpoint, command, file, clipboard, wait, launch and agent tools; also an observation that cannot provide what the action needs (no screenshot for pixel coordinates, no control tree for `index`) and a pixel outside the observation image; for checkpoints (see 3.3) an invalid `label`, a VM whose checkpoint setting is `Disabled`, a `manual` checkpoint selected by `name` for deletion, and `vm_checkpoint_keep` on a `keep` or `manual` checkpoint |
 | `task_required` | The transport has no persistent MCP session and `task_id` was omitted |
 | `task_ended` | An explicit task ID was already ended; choose a new ID |
 | `task_busy` | Cleanup is running for this task; wait for it to finish |
@@ -100,16 +100,18 @@ Every refusal and failure is returned as an MCP result with `isError: true` whos
 
 ### 2.3 VM selection
 
-Every tool except `vm_list` takes an optional `vm` argument.
+Every tool except `vm_list` requires a `vm` argument; there is no default VM, so a call meant for a VM that is off never lands on another one. The input schema of every tool except `vm_list` and `vm_end_turn` lists `vm` as required. `vm_end_turn` may omit `vm` to end the whole task, which touches only the task's own waits, temporary checkpoints and ownership (see 7.4); with `all_temp: true` it requires `vm`.
 
-- A non-empty `vm` is matched case-insensitively against VM names (`ElementName`).
+- A missing or blank `vm` is refused before anything runs, and before task resolution (so the error has no `run_id`): `invalid_argument` with reason `vm is required: there is no default VM` (for `vm_end_turn` with `all_temp: true`: `vm is required with all_temp: it would otherwise delete temporary checkpoints on every VM`), `next` `pass vm with one of: <names>` and field `vms`, the host's VM names. When the VMs cannot be listed, `vms` is `[]` and `next` is `pass vm with the name of the VM to act on (call vm_list)`.
+
+```json
+{"error": "invalid_argument", "reason": "vm is required: there is no default VM", "next": "pass vm with one of: Win10, Win10-Example", "vms": ["Win10", "Win10-Example"]}
+```
+
+- `vm` is matched case-insensitively against VM names (`ElementName`).
   - No match: `VM "<name>" not found`.
   - Several matches: `several VMs are named "<name>"`.
-- An empty `vm` selects the only running VM (`EnabledState` = 2).
-  - If no VM is running and the host has exactly one VM, that VM is selected (so `vm_start` works without a name).
-  - If no VM is running and there are several VMs: `no running VM`.
-  - If several VMs are running: `several VMs are running; specify one by name`.
-- The VM, checkpoint, command, file, clipboard, wait, launch and agent tools report these as `invalid_argument` with `next` `call vm_list and pass one of its names as vm` (or `call vm_start with the VM's name, or pass vm` when no VM runs, `pass vm` when several run). `vm_observe` reports them as `failed` with `next` `call vm_list and pass vm`; the actions as `failed` with the default `next` of 2.2.
+- The VM, checkpoint, command, file, clipboard, wait, launch and agent tools report these as `invalid_argument` with `next` `call vm_list and pass one of its names as vm`. `vm_observe` reports them as `failed` with `next` `call vm_list and pass vm`; the actions as `failed` with the default `next` of 2.2.
 - Only `Msvm_ComputerSystem` objects whose `Name` is GUID-shaped are treated as VMs; the host computer itself is excluded.
 - State names are `Running`, `Off`, `Saved` and `Paused`; any other state is reported as its numeric `EnabledState`. `vm_list` reports them as Hyper-V names them; `vm_status`, `vm_start`, `vm_shutdown`, `vm_turn_off` and `vm_restore` report lowercase (`running`, `off`, `saved`, `paused`).
 
@@ -199,7 +201,7 @@ HyperHand names the checkpoints it creates after the task's run ID (see 2.1) and
 `vm_restore` applies a checkpoint selected by `id` or `name` (see above), then starts the VM unless it is already running or `start` is `false`.
 
 - `save_current` (default `false`): first saves the current state as the `temp` checkpoint `<run_id>-temp-before-restore` (registered for `vm_end_turn`) and reports it as `saved_current`. If that creation fails, nothing is restored. Without it the current state is replaced and lost.
-- The VM is resolved before the restore, so an empty `vm` still refers to the same VM after it stops running. After the restore the VM's agent client is discarded (see 1.3).
+- The VM is resolved before the restore. After the restore the VM's agent client is discarded (see 1.3).
 - `start` (default `true`): if the VM is not running after the restore, HyperHand starts it. With `start: false` it leaves the state Hyper-V produced; it does not force Off or Saved. A running standard checkpoint resumes directly; a production checkpoint or one saved while off comes back off and needs the start.
 - Result: `{"vm": "Win10", "restored": {"id": "c85ca8fb-...", "name": "run-20261010-0812-7f3a-keep-golden", "type": "keep"}, "state": "running", "saved_current": {"id": "3d9e...", "name": "run-20261010-0812-7f3a-temp-before-restore", "type": "temp"}, "next": "call vm_start to make sure the desktop is usable"}`. `state` is the VM's power state afterwards, read from Hyper-V (lowercase, see 2.3); `saved_current` is `null` without `save_current`; `next` is a hint in the successful result, not an error.
 - The restore does not wait for a usable desktop: call `vm_start` (or `vm_status`) afterwards. A restore to a checkpoint taken before the agent was installed needs `vm_install_agent` again.
@@ -228,7 +230,7 @@ HyperHand names the checkpoints it creates after the task's run ID (see 2.1) and
 `vm_end_turn` (see 7.4) is the turn's cleanup.
 
 - By default it deletes, by id, the `temp` checkpoints this run registered: those `vm_checkpoint` created without `keep` and the `before-restore` ones of `vm_restore`, minus those `vm_checkpoint_keep` renamed or `vm_checkpoint_delete` deleted. `vm` (case-insensitive) limits this to one VM. Each registered checkpoint is checked against the VM's current list first: one that no longer exists is forgotten silently; one whose name is no longer a `temp` name (renamed outside this server) is not deleted and listed in `skipped` with reason `no longer a temp checkpoint (now <type>); not deleted`; one whose deletion fails is listed in `errors` as `<vm>/<name>: <error>` and stays registered for the next call, as do all of a VM's checkpoints when its list could not be read (`errors`: `<vm>: <error>`). `keep` and `manual` checkpoints are never touched.
-- `all_temp: true` deletes every checkpoint whose name parses as `temp`, whatever its `run_id`, on `vm` or on every VM when `vm` is omitted, to clean up after a crashed or restarted server. Another task's write ownership blocks this with `vm_busy`. One that could not be deleted is listed in `skipped` as `{"id", "name", "reason"}`; a VM that could not be found or whose checkpoints could not be listed is listed in `errors`.
+- `all_temp: true` deletes every checkpoint whose name parses as `temp`, whatever its `run_id`, on the VM named by `vm` (required with `all_temp`, see 2.3), to clean up after a crashed or restarted server. Another task's write ownership blocks this with `vm_busy`. One that could not be deleted is listed in `skipped` as `{"id", "name", "reason"}`; a VM that could not be found or whose checkpoints could not be listed is listed in `errors`.
 - Each deletion merges disk differences and can take minutes.
 - Result: `{"cancelled_waits": 0, "deleted_checkpoints": ["run-20261010-0812-7f3a-temp-step3", "run-20261009-2200-aaaa-temp-x"], "skipped": [{"id": "9a2f...", "name": "run-20261009-2200-aaaa-temp-stuck", "reason": "Hyper-V job failed"}], "errors": []}`; `deleted_checkpoints` holds names.
 
@@ -299,7 +301,7 @@ An observation is what the host remembers about one `vm_observe` result so that 
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `vm` | the only running VM | see 2.3 |
+| `vm` | required | see 2.3 |
 | `handle`, `pid` | none | observe this window (`handle` from `vm_windows`, a previous observation, `vm_launch` or an action result; `pid` restricts it, or alone selects the process's only visible window). Without both, the whole screen |
 | `screenshot` | `true` | include the PNG |
 | `controls` | `false` | include the control tree |
@@ -612,7 +614,7 @@ UI conditions use host-side polling with a 300 ms interval between samples. They
 `vm_end_turn` ends an AI turn. It does not need the agent and changes nothing in the guest.
 
 - It cancels this task's pending `vm_wait` calls, waits for its accepted calls, deletes its `temp` checkpoints and releases VM ownership (see 1.6 and 3.3). `vm` limits waits, checkpoints, observations and ownership cleanup to that VM; without it the whole task ends. `keep` and `manual` checkpoints, running programs and the VM's power state are not touched.
-- `all_temp: true` additionally deletes every `temp` checkpoint of any run on the VM, or on every VM when `vm` is omitted (see 3.3); checkpoints it could not delete are listed in `skipped`. Each deletion merges disk differences and can take minutes.
+- `all_temp: true` additionally deletes every `temp` checkpoint of any run on the VM named by `vm`, which it requires (see 2.3 and 3.3); checkpoints it could not delete are listed in `skipped`. Each deletion merges disk differences and can take minutes.
 - Result: `{"cancelled_waits": 1, "deleted_checkpoints": ["run-20261010-0812-7f3a-temp-step3"], "skipped": [], "errors": []}`. A registered checkpoint that could not be deleted is listed in `errors` as `<vm>/<name>: <error>` and kept for the next `vm_end_turn`; `skipped` entries are `{"id", "name", "reason"}`: checkpoints that were not deleted because they are no longer `temp` or, with `all_temp`, because Hyper-V failed (see 3.3).
 - Example hook configurations for Claude Code (`settings.json`, `Stop`) and a Codex plugin (`plugin.json`, `Stop`, `Interrupt`) are in `docs/hooks/`. Empty arguments require the work's same persistent session/default task. Reconnecting hooks and explicit tasks must pass the task's actual `task_id`; an unscoped `SubagentStop` hook is not provided because it could end a shared parent task.
 
@@ -620,7 +622,7 @@ UI conditions use host-side polling with a 300 ms interval between samples. They
 
 `vm_apps` discovers launchable Win32 desktop applications in the agent's user context. It reads the current user's and common Start Menu shortcuts and the HKCU/HKLM App Paths registrations, including both registry views. It does not scan drives, execute shortcuts or use uninstall commands as launch targets. Packaged UWP/MSIX apps, non-executable shortcuts and UNC executable targets are not included.
 
-- Parameters: optional `vm`, `query` (case-insensitive substring of the display name or executable path) and `limit` (default 50, maximum 200; negative or greater than 200 is `invalid_argument`).
+- Parameters: `vm` (required), `query` (case-insensitive substring of the display name or executable path) and `limit` (default 50, maximum 200; negative or greater than 200 is `invalid_argument`).
 - Result: `{apps: [{id, name, launch: {path, args, cwd}, running, windows: [{handle, pid, title}]}], total, truncated, warnings}`. `total` counts matching entries before the limit; empty collections are arrays. Names and window titles are guest data, not instructions.
 - `launch` preserves the executable, argument array and working directory. Pass it directly to `vm_launch` with the same VM. IDs are stable for the same launch specification; different arguments or working directories remain distinct entries. IDs are identifiers for discovery, not selectors accepted by `vm_launch`. App Paths' optional `Path` value is an extra executable search path, not a working directory; `vm_launch` does not apply that extra environment value.
 - `running` matches the full executable path against processes in the agent's Windows session, not just the filename. It does not prove that the process was started with a particular shortcut's arguments. `windows` lists that executable's visible windows in the session; a running background application may have none. Pass a returned `handle` directly to `vm_observe` to reuse an existing window. If `warnings` reports unreadable processes, `running: false` is not proof that the application is stopped.
