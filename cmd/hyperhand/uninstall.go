@@ -1,9 +1,13 @@
 package main
 
-import "golang.org/x/sys/windows"
+import (
+	"os"
+
+	"golang.org/x/sys/windows"
+)
 
 func uninstall() {
-	completed, err := runSetup("uninstall")
+	completed, err := runSetup("uninstall", os.Args[2:])
 	if err != nil {
 		msgBox("HyperHand uninstall incomplete:\n"+err.Error(), windows.MB_ICONERROR)
 	} else if completed {

@@ -61,9 +61,11 @@ func main() {
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "install" {
-		if err := install(); err != nil {
+		if quiet, err := install(os.Args[2:]); err != nil {
 			log.Print("install: ", err)
-			msgBox("HyperHand install failed:\n"+err.Error(), windows.MB_ICONERROR)
+			if !quiet {
+				msgBox("HyperHand install failed:\n"+err.Error(), windows.MB_ICONERROR)
+			}
 			os.Exit(1)
 		}
 		return

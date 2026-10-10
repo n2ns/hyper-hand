@@ -174,8 +174,8 @@ func installPaths() (setupPaths, error) {
 // serviceCommand is the service's command line, as mgr.CreateService builds it.
 func serviceCommand(hostExe string) string { return syscall.EscapeArg(hostExe) + " service" }
 
-func runSetup(operation string) (bool, error) {
-	owner, err := setupOwner(os.Args[2:])
+func runSetup(operation string, args []string) (bool, error) {
+	owner, err := setupOwner(args)
 	if err != nil {
 		return false, err
 	}
