@@ -33,6 +33,7 @@ var (
 	pSetForegroundWindow = user32.NewProc("SetForegroundWindow")
 	pAttachThreadInput   = user32.NewProc("AttachThreadInput")
 	pBringWindowToTop    = user32.NewProc("BringWindowToTop")
+	pIsHungAppWindow     = user32.NewProc("IsHungAppWindow")
 	pSendInput           = user32.NewProc("SendInput")
 	pSetCursorPos        = user32.NewProc("SetCursorPos")
 	pGlobalAlloc         = kernel32.NewProc("GlobalAlloc")
@@ -147,6 +148,9 @@ func findWindow(want string) (windows.HWND, string) {
 	return enumFound, enumTitle
 }
 
+// errNotResponding starts focus_window's error for a hung window; the host maps it to target_not_responding.
+const errNotResponding = "window not responding"
+
 func focusWindow(_ context.Context, args json.RawMessage, _ []byte) (any, []byte, error) {
 	var a proto.TitleArgs
 	if err := decode(args, &a); err != nil {
@@ -159,9 +163,17 @@ func focusWindow(_ context.Context, args json.RawMessage, _ []byte) (any, []byte
 		if !slices.Contains(topWindows(), found) {
 			return nil, nil, fmt.Errorf("no visible top-level window has handle %d", a.Handle)
 		}
-		title = windowText(found)
 	} else if found, title = findWindow(a.Title); found == 0 {
 		return nil, nil, fmt.Errorf("no visible window title contains %q", a.Title)
+	}
+	// ShowWindow and BringWindowToTop send messages to the window's thread and wait: a hung window (Windows shows a
+	// "Not Responding" ghost in its place) would block this op, and every later one on the connection, until it recovers.
+	// Checked before reading the title, which also sends a message when the window belongs to this process.
+	if r, _, _ := pIsHungAppWindow.Call(uintptr(found)); r != 0 {
+		return nil, nil, fmt.Errorf("%s: window %d has not processed window messages for 5 s", errNotResponding, found)
+	}
+	if title == "" {
+		title = windowText(found)
 	}
 	runtime.LockOSThread() // AttachThreadInput is per thread
 	defer runtime.UnlockOSThread()

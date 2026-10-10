@@ -290,6 +290,17 @@ func TestClickAutoActivation(t *testing.T) {
 	if fg := m["foreground"].(map[string]any); fg["handle"] != float64(30) || fg["process"] != "acad.exe" || !strings.Contains(m["next"].(string), "act on handle 30 first") {
 		t.Errorf("foreground facts: %v", m)
 	}
+	// A hung target: the agent refuses to focus it, which is target_not_responding with its pid, and nothing is sent.
+	f = backgroundAgent(false)
+	f.fn[proto.OpFocusWindow] = func(any) (any, error) {
+		return nil, errors.New("window not responding: window 10 has not processed window messages for 5 s")
+	}
+	td = newTestDeps(t, f)
+	id = td.put(options(), 1, nil)
+	r, m = td.call(t, "vm_click", map[string]any{"observation_id": id, "x": 1, "y": 1})
+	if !r.IsError || m["error"] != codeTargetNotResponding || m["handle"] != float64(10) || m["pid"] == nil || !strings.Contains(m["next"].(string), "taskkill") || td.b.events() != "" {
+		t.Errorf("hung target: %v %q", m, td.b.events())
+	}
 	// activate: false keeps the strict rule and never asks for focus.
 	f = backgroundAgent(true)
 	td = newTestDeps(t, f)

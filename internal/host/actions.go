@@ -278,6 +278,10 @@ func (a *action) activate(target proto.WindowInfo, activate bool) (proto.WindowI
 		if te := asToolError(err); te.Code != codeFailed {
 			return target, te
 		}
+		if strings.HasPrefix(err.Error(), "window not responding") {
+			// The agent refuses a hung window instead of blocking on it; Windows shows a ghost window in its place.
+			return target, refuse(codeTargetNotResponding, fmt.Sprintf("wait for the program to answer (vm_observe it later), or end it with vm_exec taskkill /PID %d /F", target.PID), map[string]any{"handle": target.Handle, "pid": target.PID}, "window %s is not responding, so it cannot be activated: %v", describe(target), err)
+		}
 		return target, a.activateFailed(target, err.Error())
 	}
 	if err := a.relist(); err != nil {

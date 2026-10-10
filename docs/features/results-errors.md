@@ -38,7 +38,7 @@ Every refusal and failure is returned as an MCP result with `isError: true` whos
 | `target_disabled` | The target window, or the window of its group that would receive input, is disabled or minimized (typically a modal dialog is open) |
 | `covered` | The screen point of a pointer action reaches a top-level window outside the target's group |
 | `integrity_mismatch` | The target window's process runs at a higher integrity level than the agent, so Windows would drop the input (UIPI) |
-| `target_not_responding` | A UI Automation action on the window did not finish within the host's 12 s, or the agent's own UI Automation helper timed out (10 s) |
+| `target_not_responding` | A UI Automation action on the window did not finish within the host's 12 s, or the agent's own UI Automation helper timed out (10 s), also for `vm_find_controls` and the UI conditions of `vm_wait`; an action whose target window is hung and would need activation (fields `handle`, `pid`, see 4.4) |
 | `unsupported_pattern` | The control does not support the requested pattern action; `supported` lists the patterns it does support |
 | `partial_input` | `vm_type` or `vm_key` stopped after some input was injected; `applied_chars` / `total_chars` or `applied` / `total` say how much. A failure before anything was injected keeps the underlying code (`failed` with `applied_chars: 0`, or the refusal of the first combination) |
 | `agent_required` | The operation needs the guest agent, which did not answer or is not installed |

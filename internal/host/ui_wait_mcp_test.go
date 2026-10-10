@@ -239,6 +239,30 @@ func TestUIWaitMCPEndTurnCancelsPolling(t *testing.T) {
 	}
 }
 
+// The agent's UI Automation helper timing out on a hung window is target_not_responding for the read-only search and
+// UI waits, not the generic failed whose next suggests the action may have happened.
+func TestUIAHelperTimeoutIsTargetNotResponding(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	interrupted := fmt.Errorf("UI Automation interrupted: context deadline exceeded")
+	cs := connectWindowMCP(t, ctx, uiWaitMCPBackend(func() (proto.ControlsResult, error) { return proto.ControlsResult{}, interrupted }))
+	out := callRefused(t, ctx, cs, "vm_wait", map[string]any{"vm": "A", "kind": "control_exists", "handle": 10, "automation_id": "cmdline", "check_only": true})
+	if out["error"] != codeTargetNotResponding || out["satisfied"] != false || out["last"] == nil {
+		t.Errorf("vm_wait: %v", out)
+	}
+	b := searchMCPBackend(func(req proto.Request) (any, error) {
+		if req.Op == proto.OpFindControls {
+			return nil, interrupted
+		}
+		return nil, fmt.Errorf("unexpected operation %s", req.Op)
+	})
+	cs = connectWindowMCP(t, ctx, b)
+	out = callRefused(t, ctx, cs, "vm_find_controls", map[string]any{"vm": "A", "handle": 10, "control_type": "Edit"})
+	if out["error"] != codeTargetNotResponding || !strings.Contains(out["next"].(string), "taskkill") {
+		t.Errorf("vm_find_controls: %v", out)
+	}
+}
+
 func TestUIWaitMCPProviderFailureIsNotConditionTimeout(t *testing.T) {
 	for _, failed := range []bool{false, true} {
 		t.Run(fmt.Sprintf("provider_failure=%v", failed), func(t *testing.T) {

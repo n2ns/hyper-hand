@@ -63,12 +63,24 @@ func (d *deps) loadControlScope(ctx context.Context, vm, id string, index int) (
 	return &w, &n, nil
 }
 
+// uiaNotResponding returns target_not_responding when err is the agent's UI Automation helper timing out on a busy or
+// hung window (a read, so nothing happened), else nil.
+func uiaNotResponding(err error) error {
+	if !strings.Contains(err.Error(), "UI Automation interrupted") {
+		return nil
+	}
+	return refuse(codeTargetNotResponding, "the window did not answer UI Automation within 10 s (busy or hung); call vm_observe on it later, or end the program with vm_exec taskkill", nil, "%v", err)
+}
+
 func controlReadError(err error) error {
 	if strings.HasPrefix(err.Error(), "element not found") {
 		return refuse(codeStaleElement, "call vm_find_controls again; the selected control no longer exists", nil, "%v", err)
 	}
 	if strings.HasPrefix(err.Error(), "control search incomplete") {
 		return refuse("search_incomplete", "narrow the search to an observed subtree; absence has not been established", nil, "%v", err)
+	}
+	if err := uiaNotResponding(err); err != nil {
+		return err
 	}
 	return agentErr(err)
 }

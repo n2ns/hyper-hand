@@ -209,6 +209,9 @@ func (d *deps) uiWaitCall(ctx context.Context, vm, op string, args, out any) err
 		err = cctx.Err()
 	}
 	if err != nil {
+		if nr := uiaNotResponding(err); nr != nil {
+			return nr
+		}
 		return agentErr(err)
 	}
 	return nil

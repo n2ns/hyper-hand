@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -192,6 +193,46 @@ func TestFocusWindowBadHandle(t *testing.T) {
 	_, _, err := focusWindow(context.Background(), mustJSON(proto.TitleArgs{Handle: 1}), nil)
 	if err == nil || !strings.Contains(err.Error(), "handle 1") {
 		t.Fatalf("want a missing-handle error, got %v", err)
+	}
+}
+
+// A window whose thread stops pumping messages is refused at once instead of blocking focus_window until it recovers.
+func TestFocusWindowRefusesHungWindow(t *testing.T) {
+	created, release, done := make(chan windows.HWND), make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		runtime.LockOSThread() // the window belongs to this thread; it is destroyed with it
+		defer runtime.UnlockOSThread()
+		const wsPopup, wsVisible, wsExNoActivate, wsExToolWindow = 0x80000000, 0x10000000, 0x08000000, 0x80
+		cls, _ := windows.UTF16PtrFromString("STATIC")
+		name, _ := windows.UTF16PtrFromString("HyperHand hung window test")
+		h, _, _ := pCreateWindowExW.Call(wsExNoActivate|wsExToolWindow, uintptr(unsafe.Pointer(cls)), uintptr(unsafe.Pointer(name)),
+			wsPopup|wsVisible, 0, uintptr(uint32(0xFFFF8AD0)), 300, 200, 0, 0, 0, 0) // y = -30000
+		var msg [48]byte
+		user32.NewProc("PeekMessageW").Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 0) // pump once, then hang
+		created <- windows.HWND(h)
+		<-release
+		pDestroyWindow.Call(h)
+	}()
+	h := <-created
+	defer func() { close(release); <-done }()
+	if h == 0 {
+		t.Fatal("CreateWindowExW failed")
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	for r, _, _ := pIsHungAppWindow.Call(uintptr(h)); r == 0; r, _, _ = pIsHungAppWindow.Call(uintptr(h)) {
+		if time.Now().After(deadline) {
+			t.Fatal("the window never became hung")
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	start := time.Now()
+	_, _, err := focusWindow(context.Background(), mustJSON(proto.TitleArgs{Handle: uint64(h)}), nil)
+	if err == nil || !strings.HasPrefix(err.Error(), errNotResponding) {
+		t.Fatalf("focusWindow on a hung window: %v", err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("focusWindow took %v", d)
 	}
 }
 
