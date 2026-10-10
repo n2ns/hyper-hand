@@ -43,7 +43,7 @@ HyperHand consists of two Windows executables.
 
 - The agent serves one host connection at a time. When it ends, the agent waits for the next one.
 - If the Hyper-V socket listener cannot be created, or accepting fails, the agent retries after 1 s.
-- The agent tray icon (the gripper icon, also the executable's icon) opens a menu on a left or right click: `等待宿主机连接` (waiting for the host) or `宿主机已连接` (host connected), and a `退出` (quit) item. Like the host tray (see 9.1), it is added at once at logon and retried every 5 seconds and whenever the taskbar is created; the agent serves the host whether or not the icon could be shown.
+- The agent tray icon (the H-on-a-screen icon, also the executable's icon) opens a menu on a left or right click: `等待宿主机连接` (waiting for the host) or `宿主机已连接` (host connected), and a `退出` (quit) item. Like the host tray (see 9.1), it is added at once at logon and retried every 5 seconds and whenever the taskbar is created; the agent serves the host whether or not the icon could be shown.
 
 ### 1.6 Task ownership
 
