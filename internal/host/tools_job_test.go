@@ -76,7 +76,7 @@ func TestJobToolsRunReadAndCancel(t *testing.T) {
 	var started map[string]any
 	callJSON(t, ctx, owner, "vm_exec", map[string]any{"vm": "CAD", "background": true, "command": "Write-Output first; Start-Sleep -Milliseconds 800; Write-Output 第二; exit 2"}, &started)
 	id, _ := started["id"].(string)
-	if !strings.HasPrefix(id, "job-") || started["state"] != "running" || started["vm"] != "CAD" {
+	if next, _ := started["next"].(string); !strings.HasPrefix(id, "job-") || started["state"] != "running" || started["vm"] != "CAD" || !strings.Contains(next, "vm_job") || !strings.Contains(next, id) {
 		t.Fatalf("start: %v", started)
 	}
 	// Another task reads the job without the VM's write ownership; output arrives incrementally.

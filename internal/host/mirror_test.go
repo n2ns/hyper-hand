@@ -159,6 +159,10 @@ func planMirror(t *testing.T, ctx context.Context, cs *mcp.ClientSession, args m
 	if plan["status"] != "planned" || plan["plan_id"] == "" || plan["plan_id"] == nil {
 		t.Fatalf("invalid plan: %v", plan)
 	}
+	if next, _ := plan["next"].(string); !strings.Contains(next, "nothing was written") || !strings.Contains(next, "phase apply") ||
+		!strings.Contains(next, plan["plan_id"].(string)) || !strings.Contains(next, plan["expires_at"].(string)) || !strings.Contains(next, fmt.Sprintf("force (%t)", plan["force"])) {
+		t.Fatalf("plan next does not describe the apply call: %v", plan["next"])
+	}
 	args["phase"], args["plan_id"] = "apply", plan["plan_id"]
 	return plan
 }

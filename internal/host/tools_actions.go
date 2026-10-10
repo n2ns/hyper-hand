@@ -73,7 +73,7 @@ type invokeIn struct {
 	VM            string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ObservationID string `json:"observation_id" jsonschema:"observation_id of a vm_observe call with controls: true"`
 	Index         int    `json:"index" jsonschema:"the control's index in that observation's tree"`
-	Action        string `json:"action" jsonschema:"Invoke, Toggle, Expand, Collapse, Select, ScrollIntoView, ScrollUp, ScrollDown, ScrollLeft or ScrollRight (case-insensitive); choose from the control's actions in the tree"`
+	Action        string `json:"action,omitempty" jsonschema:"Invoke, Toggle, Expand, Collapse, Select, ScrollIntoView, ScrollUp, ScrollDown, ScrollLeft or ScrollRight (case-insensitive); choose from the control's actions in the tree. Default: the control's only action other than SetValue; omitting it on a control with several or none is invalid_argument listing them in supported"`
 	Activate      *bool  `json:"activate,omitempty" jsonschema:"bring the window to the foreground first when it is not; default true"`
 	afterIn
 }
@@ -190,13 +190,17 @@ func registerActions(d *deps) {
 			return a.control(in.ObservationID, in.Index, "SetValue", in.Value, on(in.Activate))
 		})
 	})
-	addToolIn(d, toolSpec{name: "vm_invoke", desc: "Perform a semantic action from a control's actions in a vm_observe tree: Invoke (buttons, menu items), Toggle (check boxes), Expand, Collapse, Select (list and tab items), ScrollIntoView, ScrollUp, ScrollDown, ScrollLeft or ScrollRight. Directional scrolling targets the control's UIA ScrollPattern, moves one provider-defined small increment and needs no coordinates. Only actions for supported scroll axes are advertised. Refuses a control that no longer exists (stale_element) or lacks support (unsupported_pattern, with supported action names). Result: {ok, verified, value, state: readable control state or null, window, after}. verified is true when read-back confirms Toggle changed state, Expand expanded, Collapse collapsed, Select selected, ScrollIntoView is no longer offscreen, or a scroll percentage moved in the requested direction; false when readable but not confirmed (including no movement at a scroll boundary), null when unknown. Scroll state includes horizontally_scrollable, vertically_scrollable and horizontal_scroll_percent/vertical_scroll_percent (0 to 100 on a scrollable axis). Invoke always has verified:null because UIA cannot verify its business effect. Omitted state fields are unknown, not false. The action executes once; read-back may wait up to 250 ms for state to settle." + descUntrusted}, func(ctx context.Context, in invokeIn) (*mcp.CallToolResult, error) {
-		i := slices.IndexFunc(proto.ControlActions, func(s string) bool { return strings.EqualFold(s, in.Action) })
-		if i < 0 || proto.ControlActions[i] == "SetValue" {
-			return nil, refuse(codeInvalidArgument, "use action Invoke, Toggle, Expand, Collapse, Select, ScrollIntoView, ScrollUp, ScrollDown, ScrollLeft or ScrollRight; vm_set_value sets values", nil, "unknown action %q", in.Action)
+	addToolIn(d, toolSpec{name: "vm_invoke", desc: "Perform a semantic action from a control's actions in a vm_observe tree (action may be omitted when the control has exactly one action other than SetValue): Invoke (buttons, menu items), Toggle (check boxes), Expand, Collapse, Select (list and tab items), ScrollIntoView, ScrollUp, ScrollDown, ScrollLeft or ScrollRight. Directional scrolling targets the control's UIA ScrollPattern, moves one provider-defined small increment and needs no coordinates. Only actions for supported scroll axes are advertised. Refuses a control that no longer exists (stale_element) or lacks support (unsupported_pattern, with supported action names). Result: {ok, verified, value, state: readable control state or null, window, after}. verified is true when read-back confirms Toggle changed state, Expand expanded, Collapse collapsed, Select selected, ScrollIntoView is no longer offscreen, or a scroll percentage moved in the requested direction; false when readable but not confirmed (including no movement at a scroll boundary), null when unknown. Scroll state includes horizontally_scrollable, vertically_scrollable and horizontal_scroll_percent/vertical_scroll_percent (0 to 100 on a scrollable axis). Invoke always has verified:null because UIA cannot verify its business effect. Omitted state fields are unknown, not false. The action executes once; read-back may wait up to 250 ms for state to settle." + descUntrusted}, func(ctx context.Context, in invokeIn) (*mcp.CallToolResult, error) {
+		name := "" // empty: control picks the control's only invocable action
+		if in.Action != "" {
+			i := slices.IndexFunc(proto.ControlActions, func(s string) bool { return strings.EqualFold(s, in.Action) })
+			if i < 0 || proto.ControlActions[i] == "SetValue" {
+				return nil, refuse(codeInvalidArgument, "use action Invoke, Toggle, Expand, Collapse, Select, ScrollIntoView, ScrollUp, ScrollDown, ScrollLeft or ScrollRight; vm_set_value sets values", nil, "unknown action %q", in.Action)
+			}
+			name = proto.ControlActions[i]
 		}
 		return d.run(ctx, in.VM, in.afterIn, afterScreenshot, func(a *action) (*actionOut, error) {
-			return a.control(in.ObservationID, in.Index, proto.ControlActions[i], "", on(in.Activate))
+			return a.control(in.ObservationID, in.Index, name, "", on(in.Activate))
 		})
 	})
 	addToolIn(d, toolSpec{name: "vm_type", desc: "Type text into a window: handle (optionally restricted by pid) or pid selects it, observation_id with index first clicks that control to focus it, and without a selector the foreground window receives the text. The window is activated first (activate) and refused when disabled (target_disabled) or when the session is locked (session_unusable). With the agent the text is injected as Unicode key events; without it ASCII text goes through the Hyper-V keyboard and other text is refused (agent_required). The clipboard is never used. Result: {applied_chars, total_chars, window, after}; a failure after some characters is partial_input with the same two numbers: observe before retyping." + descUntrusted}, func(ctx context.Context, in typeTextIn) (*mcp.CallToolResult, error) {
@@ -276,6 +280,11 @@ func (a *action) control(id string, index int, action, value string, activate bo
 	if err != nil {
 		return nil, err
 	}
+	if action == "" {
+		if action, err = defaultInvokeAction(node); err != nil {
+			return nil, err
+		}
+	}
 	window, err := a.treeTarget(o)
 	if err != nil {
 		return nil, err
@@ -296,6 +305,24 @@ func (a *action) control(id string, index int, action, value string, activate bo
 		fields["value"] = r.Value
 	}
 	return a.out(fields, target, o), nil
+}
+
+// defaultInvokeAction returns vm_invoke's action when the caller omitted it: the node's only action other than
+// SetValue (which vm_set_value performs). Several or none is invalid_argument listing the node's actions.
+func defaultInvokeAction(n proto.ControlInfo) (string, error) {
+	all := controlActions(n)
+	invocable := slices.DeleteFunc(slices.Clone(all), func(s string) bool { return s == "SetValue" })
+	desc := fmt.Sprintf("control [%d] %s %q", n.Index, proto.ControlTypeName(n.ControlType), n.Name)
+	fields := map[string]any{"supported": all}
+	switch {
+	case len(invocable) == 1:
+		return invocable[0], nil
+	case len(invocable) > 1:
+		return "", refuse(codeInvalidArgument, "call vm_invoke again with action set to one of "+strings.Join(invocable, ", "), fields, "action omitted and %s supports several actions: %s", desc, strings.Join(all, ", "))
+	case slices.Contains(all, "SetValue"):
+		return "", refuse(codeInvalidArgument, "use vm_set_value for this control, or vm_click with this index", fields, "action omitted and %s supports no vm_invoke action, only SetValue", desc)
+	}
+	return "", refuse(codeInvalidArgument, "use vm_click with this index", fields, "action omitted and %s supports no UI Automation action", desc)
 }
 
 // typeText implements vm_type: it resolves the receiving window, types through the agent when it answers, else

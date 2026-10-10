@@ -571,13 +571,53 @@ func TestInvoke(t *testing.T) {
 	if a := f.args[slices.Index(f.ops, proto.OpControlAction)].(proto.ControlActionArgs); a.Action != "Toggle" || a.Value != "" {
 		t.Errorf("args %+v", a)
 	}
-	for _, action := range []string{"setvalue", "Click", ""} {
+	for _, action := range []string{"setvalue", "Click"} {
 		if r, m := td.call(t, "vm_invoke", map[string]any{"observation_id": id, "index": 1, "action": action}); !r.IsError || m["error"] != codeInvalidArgument {
 			t.Errorf("%q: %v", action, m)
 		}
 	}
 	if f.count(proto.OpControlAction) != 1 {
 		t.Errorf("invalid actions reached the agent: %v", f.ops)
+	}
+}
+
+func TestInvokeDefaultAction(t *testing.T) {
+	// One invocable action (SetValue belongs to vm_set_value): an omitted action uses it.
+	f := controlAgent(proto.ControlActionResult{}, nil)
+	td := newTestDeps(t, f)
+	nodes := controlNodes()
+	nodes[1].Actions = []string{"Invoke", "SetValue"}
+	id := td.put(options(), 1, nodes)
+	if r, m := td.call(t, "vm_invoke", map[string]any{"observation_id": id, "index": 1, "observe_after": "none"}); r.IsError || m["ok"] != true {
+		t.Fatalf("single action: %v", m)
+	}
+	if a := f.args[slices.Index(f.ops, proto.OpControlAction)].(proto.ControlActionArgs); a.Action != "Invoke" || a.RuntimeID != "42.7" {
+		t.Errorf("args %+v", a)
+	}
+
+	// Several actions (Invoke and Expand from the patterns) or none: refused before the agent, listing them.
+	for _, tt := range []struct {
+		name    string
+		actions []string
+		want    []any
+		next    string
+	}{
+		{"several", nil, []any{"Invoke", "Expand"}, "Invoke, Expand"},
+		{"only SetValue", []string{"SetValue"}, []any{"SetValue"}, "vm_set_value"},
+		{"none", []string{}, []any{}, "vm_click"},
+	} {
+		f := controlAgent(proto.ControlActionResult{}, nil)
+		td := newTestDeps(t, f)
+		nodes := controlNodes()
+		nodes[1].Actions = tt.actions
+		id := td.put(options(), 1, nodes)
+		r, m := td.call(t, "vm_invoke", map[string]any{"observation_id": id, "index": 1, "observe_after": "none"})
+		if !r.IsError || m["error"] != codeInvalidArgument || !reflect.DeepEqual(m["supported"], tt.want) || !strings.Contains(m["next"].(string), tt.next) {
+			t.Errorf("%s: %v", tt.name, m)
+		}
+		if f.count(proto.OpControlAction) != 0 {
+			t.Errorf("%s: refused default reached the agent: %v", tt.name, f.ops)
+		}
 	}
 }
 

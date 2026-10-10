@@ -171,10 +171,14 @@ func (d *deps) pushMirror(ctx context.Context, in pushIn) (*mcp.CallToolResult, 
 			p.Summary[change.Action]++
 		}
 		d.mirrors.add(p)
+		// Nothing is written by a plan; next spells out the apply call so that the caller does not stop here.
+		next := fmt.Sprintf("nothing was written yet: inspect changes, then call vm_push with mode mirror, phase apply, plan_id %s and the same vm, host_path, guest_path, force (%t) and task_id before %s (the plan is single-use)",
+			p.ID, p.Force, p.ExpiresAt.Format(time.RFC3339Nano))
 		return jsonResult(struct {
 			Status string `json:"status"`
 			*mirrorPlan
-		}{"planned", p})
+			Next string `json:"next"`
+		}{"planned", p, next})
 	}
 
 	// A consumed plan is never replayed, even after a failed or lost response.

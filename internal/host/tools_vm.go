@@ -429,7 +429,8 @@ func registerVM(d *deps) {
 			return jsonResult(struct {
 				VM string `json:"vm"`
 				proto.JobInfo
-			}{in.VM, j})
+				Next string `json:"next"`
+			}{in.VM, j, fmt.Sprintf("the command is still running: call vm_job with vm and job_id %s (wait_ms up to 60000 to wait for output or the end; then stdout_offset/stderr_offset from stdout_next/stderr_next)", j.ID)})
 		}
 		var r proto.ExecResult
 		if _, err := call(ctx, in.VM, proto.OpExec, proto.ExecArgs{Command: in.Command, Shell: in.Shell, Cwd: in.Cwd, TimeoutMs: in.TimeoutMs, Admin: in.Admin}, nil, &r); err != nil {

@@ -99,7 +99,7 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(len(Stub.calls), 2)
         Stub.delay = 2
         with self.assertRaises(hc.TransportError):
-            hh.call("vm_status", timeout=0.5)
+            hh.call("vm_status", http_timeout=0.5)
 
     def test_call_adds_vm_and_stable_task_and_saves_image(self):
         for sse in (False, True):
@@ -118,6 +118,16 @@ class ClientTest(unittest.TestCase):
             self.assertEqual(Stub.deleted, ["S1"] * len(Stub.deleted))
             self.assertTrue(Stub.deleted)
             Stub.deleted = []
+
+    def test_every_tool_argument_name_is_a_keyword(self):
+        # args (vm_launch) and tool are tool arguments, not call()'s own parameters; a positional dict still works.
+        Stub.reply = lambda p: text({"ok": True})
+        hh = hc.HyperHand(vm="Win10", url=self.url, out_dir=self.out)
+        hh.call("vm_launch", path="C:\\acad.exe", args=["/nologo"], tool="x")
+        hh.call("vm_launch", {"path": "C:\\acad.exe", "args": ["/b"]}, args=["/nologo"])
+        a, b = Stub.calls[0]["arguments"], Stub.calls[1]["arguments"]
+        self.assertEqual((a["args"], a["tool"], a["path"]), (["/nologo"], "x", "C:\\acad.exe"))
+        self.assertEqual((b["args"], b["path"]), (["/nologo"], "C:\\acad.exe"))
 
     def test_tool_error_raises_with_fields(self):
         Stub.reply = lambda p: text({"error": "vm_busy", "reason": "owned", "next": "wait", "owner_task_id": "t1"}, is_error=True)

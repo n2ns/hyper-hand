@@ -302,21 +302,22 @@ class HyperHand:
         """The live tool list (name, description, inputSchema, annotations)."""
         return self._request("tools/list", {}, self.timeout)["tools"]
 
-    def call(self, tool, args=None, *, timeout=None, **kwargs):
+    def call(self, tool, arguments=None, /, *, http_timeout=None, **kwargs):
         """Call a tool and return its JSON result as a dict (plus "_image": the saved PNG path, when there was one).
 
-        Arguments come from args (a dict) and keyword arguments; vm and task_id are added unless given. The HTTP
-        timeout defaults to the client's, raised to fit timeout_ms / wait_ms arguments of long calls."""
-        a = dict(args or {})
+        Arguments come from an optional positional dict and keyword arguments, so every tool argument name works as a
+        keyword (vm_launch args=[...] included); vm and task_id are added unless given. http_timeout (seconds) is the
+        HTTP timeout; it defaults to the client's, raised to fit timeout_ms / wait_ms arguments of long calls."""
+        a = dict(arguments or {})
         a.update(kwargs)
         if self.vm is not None and tool != "vm_list":
             a.setdefault("vm", self.vm)
         if self.task_id:
             a.setdefault("task_id", self.task_id)
-        if timeout is None:
+        if http_timeout is None:
             longest = max(int(a.get("timeout_ms") or 0), int(a.get("wait_ms") or 0)) / 1000
-            timeout = max(self.timeout, longest + 30, _SLOW.get(tool, 0))
-        return self._result(tool, self._request("tools/call", {"name": tool, "arguments": a}, timeout))
+            http_timeout = max(self.timeout, longest + 30, _SLOW.get(tool, 0))
+        return self._result(tool, self._request("tools/call", {"name": tool, "arguments": a}, http_timeout))
 
     def _result(self, tool, result):
         obj, image = None, None

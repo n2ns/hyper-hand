@@ -83,7 +83,7 @@ API summary:
 | Function | Behavior |
 |---|---|
 | `HyperHand(vm=None, task_id=None, url=None, out_dir=None, timeout=120)` | Opens one MCP session on first use. `task_id=""` sends no task ID. `out_dir` defaults to `./temp/hyperhand`. The HTTP timeout grows to fit `timeout_ms` and `wait_ms`. `close()`, or leaving the `with` block, deletes the session but does not end the task. |
-| `call(tool, args=None, **kwargs)` | Returns the result dict. Raises `HyperHandError` (`code`, `reason`, `next`, `obj`) on a tool error and `TransportError` when the server cannot be reached. |
+| `call(tool, arguments=None, /, *, http_timeout=None, **kwargs)` | Tool arguments come from the optional positional dict and from keywords; every tool argument name works as a keyword, including `args` (`hh.call("vm_launch", path=..., args=["/nologo"])`). `http_timeout` (seconds) overrides the HTTP timeout. Returns the result dict. Raises `HyperHandError` (`code`, `reason`, `next`, `obj`) on a tool error and `TransportError` when the server cannot be reached. |
 | `end_turn(vm=None, **kwargs)` | `vm_end_turn` for this task. |
 | `tools()` | The live tool list. |
 | `parse_controls(text_or_result)` | Parses a control tree into dicts. |
