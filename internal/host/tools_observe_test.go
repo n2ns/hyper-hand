@@ -190,7 +190,7 @@ func TestObserveWholeScreen(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cs := connectObserveMCP(t, ctx, newObserveBackend(t))
-	out, w, h := observe(t, ctx, cs, map[string]any{})
+	out, w, h := observe(t, ctx, cs, map[string]any{"vm": "CAD"})
 	if w != 64 || h != 40 {
 		t.Errorf("image %dx%d", w, h)
 	}
@@ -214,7 +214,7 @@ func TestObserveWholeScreen(t *testing.T) {
 		t.Errorf("focused %v", f)
 	}
 	// screenshot: false returns only the JSON item.
-	out, w, h = observe(t, ctx, cs, map[string]any{"screenshot": false})
+	out, w, h = observe(t, ctx, cs, map[string]any{"vm": "CAD", "screenshot": false})
 	if w != 0 || h != 0 || out["screenshot"] != nil {
 		t.Errorf("screenshot: false returned an image %dx%d %v", w, h, out["screenshot"])
 	}
@@ -225,7 +225,7 @@ func TestObserveWindowCrop(t *testing.T) {
 	defer cancel()
 	b := newObserveBackend(t)
 	cs := connectObserveMCP(t, ctx, b)
-	out, w, h := observe(t, ctx, cs, map[string]any{"handle": 10})
+	out, w, h := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10})
 	if w != 32 || h != 26 {
 		t.Errorf("image %dx%d, want 32x26", w, h)
 	}
@@ -240,37 +240,37 @@ func TestObserveWindowCrop(t *testing.T) {
 		t.Errorf("window rect %v", r)
 	}
 	// By pid alone, when the process has one window.
-	if out, _, _ := observe(t, ctx, cs, map[string]any{"pid": 200}); out["window"].(map[string]any)["handle"] != 20.0 {
+	if out, _, _ := observe(t, ctx, cs, map[string]any{"vm": "CAD", "pid": 200}); out["window"].(map[string]any)["handle"] != 20.0 {
 		t.Errorf("pid selection: %v", out["window"])
 	}
 	// Partly off screen: cropped to the visible part.
-	out, w, h = observe(t, ctx, cs, map[string]any{"handle": 20})
+	out, w, h = observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 20})
 	if w != 14 || h != 20 || shot(out)["origin_x"] != 50.0 || shot(out)["origin_y"] != 20.0 {
 		t.Errorf("partly off screen: %dx%d %v", w, h, shot(out))
 	}
 	// Entirely off screen (minimized).
-	e := observeError(t, ctx, cs, map[string]any{"handle": 30}, codeInvalidArgument)
+	e := observeError(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 30}, codeInvalidArgument)
 	if !strings.Contains(e["reason"].(string), "minimized") {
 		t.Errorf("minimized reason: %v", e["reason"])
 	}
 	// Unknown handle: no_window with candidates; pid with two windows: ambiguous_target with those two.
-	e = observeError(t, ctx, cs, map[string]any{"handle": 99}, codeNoWindow)
+	e = observeError(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 99}, codeNoWindow)
 	if c, _ := e["candidates"].([]any); len(c) != 5 || !strings.Contains(e["next"].(string), "vm_windows") {
 		t.Errorf("no_window: %v", e)
 	}
-	e = observeError(t, ctx, cs, map[string]any{"pid": 400}, codeAmbiguousTarget)
+	e = observeError(t, ctx, cs, map[string]any{"vm": "CAD", "pid": 400}, codeAmbiguousTarget)
 	if c, _ := e["candidates"].([]any); len(c) != 2 || c[0].(map[string]any)["handle"] != 40.0 || c[1].(map[string]any)["handle"] != 41.0 {
 		t.Errorf("ambiguous: %v", e)
 	}
 	// Handle outside the pid.
-	observeError(t, ctx, cs, map[string]any{"handle": 10, "pid": 200}, codeNoWindow)
+	observeError(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "pid": 200}, codeNoWindow)
 }
 
 func TestObserveMaxSizeAndValidation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cs := connectObserveMCP(t, ctx, newObserveBackend(t))
-	out, w, h := observe(t, ctx, cs, map[string]any{"handle": 10, "max_size": 16})
+	out, w, h := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "max_size": 16})
 	if w != 16 || h != 13 {
 		t.Errorf("image %dx%d, want 16x13", w, h)
 	}
@@ -278,10 +278,10 @@ func TestObserveMaxSizeAndValidation(t *testing.T) {
 		t.Errorf("screenshot %v", s)
 	}
 	// Never upscales.
-	if _, w, h := observe(t, ctx, cs, map[string]any{"handle": 10, "max_size": 500}); w != 32 || h != 26 {
+	if _, w, h := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "max_size": 500}); w != 32 || h != 26 {
 		t.Errorf("upscaled to %dx%d", w, h)
 	}
-	for _, args := range []map[string]any{{"max_size": -1}, {"max_depth": 11}, {"max_nodes": 1001}, {"max_depth": -1}} {
+	for _, args := range []map[string]any{{"vm": "CAD", "max_size": -1}, {"vm": "CAD", "max_depth": 11}, {"vm": "CAD", "max_nodes": 1001}, {"vm": "CAD", "max_depth": -1}} {
 		e := observeError(t, ctx, cs, args, codeInvalidArgument)
 		if n := e["next"].(string); !strings.Contains(n, "max_") {
 			t.Errorf("%v: next %q does not name the allowed range", args, n)
@@ -301,7 +301,7 @@ func TestObserveControls(t *testing.T) {
 		return r, nil
 	}
 	cs := connectObserveMCP(t, ctx, b)
-	out, w, h := observe(t, ctx, cs, map[string]any{"handle": 10, "controls": true})
+	out, w, h := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "controls": true})
 	if w != 32 || h != 26 {
 		t.Errorf("image %dx%d", w, h)
 	}
@@ -325,12 +325,12 @@ func TestObserveControls(t *testing.T) {
 		t.Errorf("controls_diff present without diff_from")
 	}
 	// Custom limits are passed through.
-	observe(t, ctx, cs, map[string]any{"handle": 10, "controls": true, "max_depth": 2, "max_nodes": 50})
+	observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "controls": true, "max_depth": 2, "max_nodes": 50})
 	if got[1] != (proto.ControlsArgs{Handle: 10, PID: 100, MaxDepth: 2, MaxNodes: 50}) {
 		t.Errorf("custom limits: %+v", got[1])
 	}
 	// Whole screen with controls: the foreground window's tree, named in window; the screenshot stays the whole screen.
-	out, w, h = observe(t, ctx, cs, map[string]any{"controls": true})
+	out, w, h = observe(t, ctx, cs, map[string]any{"vm": "CAD", "controls": true})
 	if w != 64 || h != 40 || got[2].Handle != 10 || got[2].PID != 100 {
 		t.Errorf("whole screen controls: %dx%d args %+v", w, h, got[2])
 	}
@@ -347,7 +347,7 @@ func TestObserveDiffFrom(t *testing.T) {
 	defer cancel()
 	b := newObserveBackend(t)
 	cs := connectObserveMCP(t, ctx, b)
-	first, _, _ := observe(t, ctx, cs, map[string]any{"handle": 10, "controls": true})
+	first, _, _ := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "controls": true})
 	id := first["observation_id"].(string)
 	b.controls = func(proto.ControlsArgs) (proto.ControlsResult, error) {
 		r := observeControls()
@@ -356,7 +356,7 @@ func TestObserveDiffFrom(t *testing.T) {
 		return r, nil
 	}
 	// diff_from implies controls.
-	out, _, _ := observe(t, ctx, cs, map[string]any{"handle": 10, "diff_from": id})
+	out, _, _ := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "diff_from": id})
 	if _, ok := out["controls"]; ok {
 		t.Errorf("controls present with a diff: %v", out["controls"])
 	}
@@ -380,8 +380,8 @@ func TestObserveDiffFrom(t *testing.T) {
 		args map[string]any
 		want string
 	}{
-		{map[string]any{"handle": 10, "controls": true, "diff_from": "o-nope"}, "diff_from ignored: observation \"o-nope\" is unknown"},
-		{map[string]any{"handle": 20, "controls": true, "diff_from": id}, "diff_from ignored: observation " + id + " is of a different window"},
+		{map[string]any{"vm": "CAD", "handle": 10, "controls": true, "diff_from": "o-nope"}, "diff_from ignored: observation \"o-nope\" is unknown"},
+		{map[string]any{"vm": "CAD", "handle": 20, "controls": true, "diff_from": id}, "diff_from ignored: observation " + id + " is of a different window"},
 	} {
 		out, _, _ := observe(t, ctx, cs, tt.args)
 		if out["controls"] == nil || out["controls_diff"] != nil || !strings.HasPrefix(fmt.Sprint(out["stale_risk"]), tt.want) {
@@ -389,8 +389,8 @@ func TestObserveDiffFrom(t *testing.T) {
 		}
 	}
 	// A base without a control tree.
-	plain, _, _ := observe(t, ctx, cs, map[string]any{"handle": 10})
-	out, _, _ = observe(t, ctx, cs, map[string]any{"handle": 10, "diff_from": plain["observation_id"]})
+	plain, _, _ := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10})
+	out, _, _ = observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "diff_from": plain["observation_id"]})
 	if !strings.Contains(fmt.Sprint(out["stale_risk"]), "has no control tree") || out["controls"] == nil {
 		t.Errorf("base without tree: %v", out["stale_risk"])
 	}
@@ -402,7 +402,7 @@ func TestObserveAgentOffline(t *testing.T) {
 	b := newObserveBackend(t)
 	b.dialErr = errors.New("hvsock: the VM is not running or the agent is not listening")
 	cs := connectObserveMCP(t, ctx, b)
-	out, w, h := observe(t, ctx, cs, map[string]any{"controls": true})
+	out, w, h := observe(t, ctx, cs, map[string]any{"vm": "CAD", "controls": true})
 	if w != 64 || h != 40 || out["agent"] != "offline" {
 		t.Errorf("offline whole screen: %dx%d %v", w, h, out)
 	}
@@ -411,12 +411,12 @@ func TestObserveAgentOffline(t *testing.T) {
 			t.Errorf("offline: %s present: %v", k, out[k])
 		}
 	}
-	e := observeError(t, ctx, cs, map[string]any{"handle": 10}, codeAgentRequired)
+	e := observeError(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10}, codeAgentRequired)
 	if !strings.Contains(e["next"].(string), "vm_status") {
 		t.Errorf("agent_required next: %v", e["next"])
 	}
 	// vm_windows needs the agent.
-	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_windows", Arguments: map[string]any{}})
+	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_windows", Arguments: map[string]any{"vm": "CAD"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func TestObserveUIATimeout(t *testing.T) {
 		return proto.ControlsResult{}, errors.New("list_controls timed out after 10s")
 	}
 	cs := connectObserveMCP(t, ctx, b)
-	out, w, h := observe(t, ctx, cs, map[string]any{"handle": 10, "controls": true, "diff_from": "o-x"})
+	out, w, h := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "controls": true, "diff_from": "o-x"})
 	if w != 32 || h != 26 {
 		t.Errorf("image %dx%d", w, h)
 	}
@@ -454,14 +454,14 @@ func TestObserveUIATimeout(t *testing.T) {
 	b.controls = func(proto.ControlsArgs) (proto.ControlsResult, error) {
 		return proto.ControlsResult{}, errors.New("window not found")
 	}
-	observeError(t, ctx, cs, map[string]any{"handle": 10, "controls": true}, codeFailed)
+	observeError(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "controls": true}, codeFailed)
 }
 
 func TestVMWindowsResult(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cs := connectObserveMCP(t, ctx, newObserveBackend(t))
-	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_windows", Arguments: map[string]any{}})
+	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_windows", Arguments: map[string]any{"vm": "CAD"}})
 	if err != nil {
 		t.Fatal(err)
 	}

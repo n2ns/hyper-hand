@@ -42,8 +42,8 @@ func connectInputMCP(t *testing.T, ctx context.Context, b Backend) *mcp.ClientSe
 	return c
 }
 
-// vm_type pins the default VM once, types through the agent only, and with a background target either activates it
-// (default) or refuses (activate: false).
+// vm_type acts on the named VM (never resolving a default), types through the agent only, and with a background target
+// either activates it (default) or refuses (activate: false).
 func TestInputMCPTypePinsTargetAndActivates(t *testing.T) {
 	for _, mode := range []string{"success", "old-agent", "background", "background-strict"} {
 		t.Run(mode, func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestInputMCPTypePinsTargetAndActivates(t *testing.T) {
 				},
 			}, press: func(string, string) error { forbidden.Add(1); return nil }, typeText: func(string, string) error { forbidden.Add(1); return nil }}
 			cs := connectInputMCP(t, ctx, b)
-			args := map[string]any{"text": inputText, "handle": 17, "pid": 42}
+			args := map[string]any{"vm": "A", "text": inputText, "handle": 17, "pid": 42}
 			if mode == "background-strict" {
 				args["activate"] = false
 			}
@@ -122,7 +122,7 @@ func TestInputMCPTypePinsTargetAndActivates(t *testing.T) {
 			if mode == "background" {
 				wantFocused = 1
 			}
-			if defaults.Load() != 1 || sent.Load() != wantSent || focused.Load() != wantFocused || forbidden.Load() != 0 {
+			if defaults.Load() != 0 || sent.Load() != wantSent || focused.Load() != wantFocused || forbidden.Load() != 0 {
 				t.Fatalf("default resolutions=%d sends=%d focused=%d forbidden=%d", defaults.Load(), sent.Load(), focused.Load(), forbidden.Load())
 			}
 		})
@@ -138,10 +138,10 @@ func TestInputMCPSequenceValidatesBeforeSending(t *testing.T) {
 	}, press: func(string, string) error { operations.Add(1); return nil }}
 	cs := connectInputMCP(t, ctx, b)
 	for _, args := range []map[string]any{
-		{"sequence": []string{"ctrl+a", "not-a-key"}},
-		{"keys": "enter", "sequence": []string{"ctrl+a"}},
-		{"sequence": []string{}},
-		{"keys": "enter", "observe_after": "video"},
+		{"vm": "A", "sequence": []string{"ctrl+a", "not-a-key"}},
+		{"vm": "A", "keys": "enter", "sequence": []string{"ctrl+a"}},
+		{"vm": "A", "sequence": []string{}},
+		{"vm": "A", "keys": "enter", "observe_after": "video"},
 	} {
 		r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_key", Arguments: args})
 		if err == nil && !r.IsError {
@@ -191,7 +191,7 @@ func TestInputMCPSequenceOrderAndChangedTarget(t *testing.T) {
 				return nil
 			}}
 			cs := connectInputMCP(t, ctx, b)
-			r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_key", Arguments: map[string]any{"handle": 17, "pid": 42, "sequence": []string{"ctrl+a", "tab", "enter"}}})
+			r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "vm_key", Arguments: map[string]any{"vm": "A", "handle": 17, "pid": 42, "sequence": []string{"ctrl+a", "tab", "enter"}}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -207,7 +207,7 @@ func TestInputMCPSequenceOrderAndChangedTarget(t *testing.T) {
 			}
 			mu.Lock()
 			defer mu.Unlock()
-			if !reflect.DeepEqual(pressed, want) || defaults.Load() != 1 {
+			if !reflect.DeepEqual(pressed, want) || defaults.Load() != 0 {
 				t.Fatalf("pressed=%v default resolutions=%d", pressed, defaults.Load())
 			}
 		})

@@ -113,9 +113,16 @@ func newTestDeps(t *testing.T, f *fakeCall) *testDeps {
 	return td
 }
 
-// call runs a tool and decodes its JSON item; for an error result the map is the error object.
+// call runs a tool and decodes its JSON item; for an error result the map is the error object. vm defaults to the
+// fixture VM "A" when args omit it (every tool requires vm).
 func (td *testDeps) call(t *testing.T, name string, args map[string]any) (*mcp.CallToolResult, map[string]any) {
 	t.Helper()
+	if _, ok := args["vm"]; !ok {
+		if args == nil {
+			args = map[string]any{}
+		}
+		args["vm"] = "A"
+	}
 	r, err := td.cs.CallTool(td.ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
 		t.Fatalf("%s: %v", name, err)
