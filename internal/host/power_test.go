@@ -80,7 +80,12 @@ func TestPowerTools(t *testing.T) {
 	} {
 		b := &powerBackend{state: c.state}
 		cs := connect(b)
+		// No default VM: without vm the power tool is refused and nothing is shut down or turned off.
 		r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: c.tool, Arguments: map[string]any{}})
+		if err != nil || !r.IsError || !strings.Contains(resultText(r), `"error":"invalid_argument"`) || !strings.Contains(resultText(r), "vm is required") || len(b.calls) != 0 {
+			t.Fatalf("%s from %s without vm: %v %s, calls %v", c.tool, c.state, err, resultText(r), b.calls)
+		}
+		r, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: c.tool, Arguments: map[string]any{"vm": "Win10"}})
 		cs.Close()
 		if err != nil || r.IsError {
 			t.Fatalf("%s from %s: %v %+v", c.tool, c.state, err, r)

@@ -56,9 +56,9 @@ func TestEndTurnCancelsWaits(t *testing.T) {
 }
 
 // callRefusedQuiet is callRefused without a *testing.T, for calls made from another goroutine; nil means the call did
-// not produce a refusal.
+// not produce a refusal. Like callRefused it passes the fixture VM when args omit vm.
 func callRefusedQuiet(ctx context.Context, cs *mcp.ClientSession, name string, args map[string]any) map[string]any {
-	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: withFixtureVM(cs, name, args)})
 	if err != nil || !r.IsError {
 		return nil
 	}
