@@ -12,7 +12,7 @@ import (
 
 type endTurnIn struct {
 	VM      string `json:"vm,omitempty" jsonschema:"clean only this task's waits, observations, temporary checkpoints and ownership on this VM, leaving the task active on other VMs; omit to end the entire task"`
-	AllTemp bool   `json:"all_temp,omitempty" jsonschema:"also delete temp checkpoints of other runs (every checkpoint named <run_id>-temp-<label>) on the VM, or on every VM when vm is omitted; default false"`
+	AllTemp bool   `json:"all_temp,omitempty" jsonschema:"also delete temp checkpoints of other runs (every checkpoint named <run_id>-temp-<label>) on the VM; requires vm; default false"`
 }
 
 // endTurnOut is vm_end_turn's result. DeletedCheckpoints are the names of the deleted checkpoints; Skipped lists
@@ -103,7 +103,7 @@ func deleteRegisteredTemp(d *deps, vm string, cps []tempCheckpoint, out *endTurn
 
 // registerTurn registers vm_end_turn.
 func registerTurn(d *deps) {
-	addToolIn(d, toolSpec{name: "vm_end_turn", desc: "End this task: cancel its pending waits, wait for its in-flight calls to finish, delete its temporary checkpoints, clear its observations and release its VM write ownership. Pass vm to clean only that VM and keep the task active; omit vm to end the task and reject late calls with this task_id. Repeated full cleanup is harmless. Cleanup failures retain ownership so the same task can retry. Keep and manual checkpoints, running programs and VM power are preserved. A Stop hook on another connection must pass the original task_id. all_temp: true additionally deletes every temp checkpoint of any run (names <run_id>-temp-<label>) on the VM, or on every VM when vm is omitted, to clean up after a crashed or restarted server; this crosses runs, so use it only when no other HyperHand client is working on the VM. Deleting merges disk differences and can take minutes per checkpoint; registered temps that were renamed to keep (or by hand) in the meantime are not deleted and listed in skipped, as are temps all_temp could not delete.", destructive: true, idempotent: true}, func(ctx context.Context, in endTurnIn) (*mcp.CallToolResult, error) {
+	addToolIn(d, toolSpec{name: "vm_end_turn", desc: "End this task: cancel its pending waits, wait for its in-flight calls to finish, delete its temporary checkpoints, clear its observations and release its VM write ownership. Pass vm to clean only that VM and keep the task active; omit vm to end the task and reject late calls with this task_id. Repeated full cleanup is harmless. Cleanup failures retain ownership so the same task can retry. Keep and manual checkpoints, running programs and VM power are preserved. A Stop hook on another connection must pass the original task_id. all_temp: true additionally deletes every temp checkpoint of any run (names <run_id>-temp-<label>) on the VM named by vm (required with all_temp), to clean up after a crashed or restarted server; this crosses runs, so use it only when no other HyperHand client is working on the VM. Deleting merges disk differences and can take minutes per checkpoint; registered temps that were renamed to keep (or by hand) in the meantime are not deleted and listed in skipped, as are temps all_temp could not delete.", destructive: true, idempotent: true}, func(ctx context.Context, in endTurnIn) (*mcp.CallToolResult, error) {
 		var task *taskState
 		if t, ok := ctx.Value(taskContextKey{}).(*taskState); ok {
 			task = t

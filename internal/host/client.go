@@ -218,7 +218,8 @@ type Manager struct {
 	transfers  map[string]chan struct{} // full copy/mirror operations, retained across connection replacement
 }
 
-// Client returns the agent client for a VM name ("" = the only running VM).
+// Client returns the agent client for a VM name. Tools always pass an explicit name (vmRequired); "" still resolves
+// to the only running VM for internal callers of the backend.
 func (m *Manager) Client(vm string) (*Client, error) {
 	b := m.backend()
 	v, err := b.Find(vm)

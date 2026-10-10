@@ -10,7 +10,7 @@ import (
 )
 
 type findControlsIn struct {
-	VM            string `json:"vm,omitempty" jsonschema:"VM name; default the only running VM"`
+	VM            string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Handle        uint64 `json:"handle,omitempty" jsonschema:"window to search"`
 	PID           uint32 `json:"pid,omitempty" jsonschema:"restrict handle or select the process's only visible window"`
 	ObservationID string `json:"observation_id,omitempty" jsonschema:"with index, search inside this observed control instead of a whole window"`

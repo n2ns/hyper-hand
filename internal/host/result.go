@@ -131,6 +131,16 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 		schema.Properties = map[string]*jsonschema.Schema{}
 	}
 	schema.Properties["task_id"] = &jsonschema.Schema{Type: "string", Description: "Unique AI task identifier. Reuse on every call when sharing a session or reconnecting; omit only for a dedicated persistent MCP session. vm_end_turn without vm ends this task; use a new ID afterwards."}
+	// vm is required everywhere but vm_list and vm_end_turn (see vmRequired): a default VM let a call land on another
+	// VM whenever the intended one was off.
+	if p := schema.Properties["vm"]; p != nil {
+		if spec.name == "vm_end_turn" {
+			p.Description = "VM name from vm_list. Omit only to end the whole task (this task's own waits, temporary checkpoints and ownership on every VM); required with all_temp."
+		} else {
+			p.Description = "VM name from vm_list (required). There is no default VM."
+			schema.Required = append(schema.Required, "vm")
+		}
+	}
 	tool.InputSchema = schema
 	resolved, err := schema.Resolve(&jsonschema.ResolveOptions{ValidateDefaults: true})
 	if err != nil {
@@ -152,6 +162,10 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 				return errorResult("", invalidToolArguments(spec.name, inputErr)), nil
 			}
 			_ = json.Unmarshal(req.Params.Arguments, &args)
+		}
+		// Before anything else: a missing vm is refused with the VM names, not a generic schema error, and nothing runs.
+		if err := vmRequired(d, spec.name, req.Params.Arguments, args.VM); err != nil {
+			return errorResult("", err), nil
 		}
 		task, err := d.resolveTask(req, identity.TaskID, spec.name == "vm_end_turn")
 		if err != nil {
@@ -252,4 +266,51 @@ func decodeToolArguments(raw json.RawMessage, schema *jsonschema.Resolved, in an
 		return err
 	}
 	return json.Unmarshal(raw, in)
+}
+
+// vmRequired refuses a call without vm. Every tool except vm_list names its VM explicitly: with a default ("the only
+// running VM") a call meant for a VM that happened to be off reached another one, including vm_restore, vm_shutdown,
+// vm_turn_off and vm_exec. vm_end_turn may omit vm to end the whole task, which only touches the task's own resources;
+// with all_temp, which deletes every run's temporary checkpoints, it must name the VM.
+func vmRequired(d *deps, tool string, raw json.RawMessage, vm string) error {
+	if tool == "vm_list" || strings.TrimSpace(vm) != "" {
+		return nil
+	}
+	if tool == "vm_end_turn" {
+		var in struct {
+			AllTemp bool `json:"all_temp"`
+		}
+		if len(raw) > 0 {
+			_ = json.Unmarshal(raw, &in)
+		}
+		if !in.AllTemp {
+			return nil
+		}
+	}
+	names := vmNames(d.raw)
+	next := "pass vm with the name of the VM to act on (call vm_list)"
+	if len(names) > 0 {
+		next = fmt.Sprintf("pass vm with one of: %s", strings.Join(names, ", "))
+	}
+	what := "vm is required: there is no default VM"
+	if tool == "vm_end_turn" {
+		what = "vm is required with all_temp: it would otherwise delete temporary checkpoints on every VM"
+	}
+	return refuse(codeInvalidArgument, next, map[string]any{"vms": names}, "%s", what)
+}
+
+// vmNames lists the VM names for an error's next step; empty when they cannot be listed (the refusal still stands).
+func vmNames(b Backend) (names []string) {
+	names = []string{}
+	defer func() {
+		if recover() != nil { // a test fake without a VM list
+			names = []string{}
+		}
+	}()
+	if vms, err := b.ListVMs(); err == nil {
+		for _, v := range vms {
+			names = append(names, v.Name)
+		}
+	}
+	return names
 }

@@ -23,7 +23,7 @@ import (
 )
 
 type execIn struct {
-	VM        string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM        string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Command   string `json:"command"`
 	Shell     string `json:"shell,omitempty" jsonschema:"powershell (default) or cmd"`
 	Cwd       string `json:"cwd,omitempty" jsonschema:"working directory in the guest"`
@@ -31,7 +31,7 @@ type execIn struct {
 	Admin     bool   `json:"admin,omitempty" jsonschema:"run elevated (administrator)"`
 }
 type pushIn struct {
-	VM        string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM        string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	HostPath  string `json:"host_path" jsonschema:"file or directory on the host"`
 	GuestPath string `json:"guest_path" jsonschema:"destination file or directory in the guest"`
 	Force     bool   `json:"force,omitempty" jsonschema:"upload every file even if the guest already has an identical copy; default false"`
@@ -40,24 +40,24 @@ type pushIn struct {
 	PlanID    string `json:"plan_id,omitempty" jsonschema:"single-use mirror plan from phase plan; expires after 10 minutes; belongs to this task and VM"`
 }
 type pullIn struct {
-	VM        string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM        string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	GuestPath string `json:"guest_path" jsonschema:"file or directory in the guest"`
 	HostPath  string `json:"host_path" jsonschema:"destination file or directory on the host"`
 }
 type checkpointIn struct {
-	VM    string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM    string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Label string `json:"label,omitempty" jsonschema:"1 to 64 characters without \\ / : * ? \" < > | or line breaks; the checkpoint is named <run_id>-temp-<label> (or -keep-); default: the current time hhmmss"`
 	Keep  bool   `json:"keep,omitempty" jsonschema:"true creates a keep checkpoint that stays across runs; false (default) creates a temp one that vm_end_turn deletes"`
 }
 type restoreIn struct {
-	VM          string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM          string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ID          string `json:"id,omitempty" jsonschema:"checkpoint id from vm_checkpoints (the stable selector; preferred)"`
 	Name        string `json:"name,omitempty" jsonschema:"checkpoint name, accepted when exactly one checkpoint has it"`
 	Start       *bool  `json:"start,omitempty" jsonschema:"start the VM after restoring if it is not running; default true"`
 	SaveCurrent bool   `json:"save_current,omitempty" jsonschema:"first save the current state as a temp checkpoint labelled before-restore; default false (the current state is lost)"`
 }
 type waitIn struct {
-	VM            string              `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM            string              `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Kind          string              `json:"kind" jsonschema:"process_exit/process_running (name), file_exists (path), window_exists/window_gone/window_foreground (handle or pid), control_exists/control_gone/control_matches (observation_id and index, or handle/pid and automation_id/control_name)"`
 	Name          string              `json:"name,omitempty" jsonschema:"process name, e.g. notepad"`
 	Path          string              `json:"path,omitempty" jsonschema:"file path in the guest"`
@@ -77,7 +77,7 @@ type waitIn struct {
 	MaxNodes      int                 `json:"max_nodes,omitempty" jsonschema:"UI control tree size: default 200, maximum 1000"`
 }
 type clipboardIn struct {
-	VM   string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM   string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Text string `json:"text"`
 }
 

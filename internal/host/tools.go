@@ -13,7 +13,7 @@ import (
 const GuestAgentPath = `C:\Users\Public\HyperHand\hyperhand-agent.exe`
 
 type vmIn struct {
-	VM string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 }
 
 // deps is what every tool registration needs. Tools live in tools_*.go, one register function per file:

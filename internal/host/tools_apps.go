@@ -9,7 +9,7 @@ import (
 )
 
 type appsIn struct {
-	VM    string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM    string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Query string `json:"query,omitempty" jsonschema:"case-insensitive substring of application name or executable path"`
 	Limit int    `json:"limit,omitempty" jsonschema:"maximum applications to return; default 50; range 1 to 200"`
 }

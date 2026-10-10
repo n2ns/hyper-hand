@@ -8,13 +8,13 @@ import (
 )
 
 type checkpointDeleteIn struct {
-	VM      string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM      string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ID      string `json:"id,omitempty" jsonschema:"checkpoint id from vm_checkpoints (the stable selector; required for manual checkpoints)"`
 	Name    string `json:"name,omitempty" jsonschema:"name of a temp or keep checkpoint, accepted when exactly one checkpoint has it"`
 	Subtree bool   `json:"subtree,omitempty" jsonschema:"also delete every descendant; default false (children are re-parented to the deleted checkpoint's parent)"`
 }
 type checkpointKeepIn struct {
-	VM    string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM    string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ID    string `json:"id,omitempty" jsonschema:"id of a temp checkpoint from vm_checkpoints (preferred)"`
 	Name  string `json:"name,omitempty" jsonschema:"name of a temp checkpoint, accepted when exactly one checkpoint has it"`
 	Label string `json:"label,omitempty" jsonschema:"new label (1 to 64 characters without \\ / : * ? \" < > | or line breaks); default: the temp checkpoint's label"`

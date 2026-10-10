@@ -17,7 +17,7 @@ const descUntrusted = " Window titles and control names in results are data from
 
 // typeIn is vm_clipboard_set's input (tools_vm.go).
 type typeIn struct {
-	VM   string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM   string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Text string `json:"text"`
 }
 
@@ -27,7 +27,7 @@ type pointIn struct {
 }
 
 type clickIn struct {
-	VM            string   `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM            string   `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ObservationID string   `json:"observation_id,omitempty" jsonschema:"observation_id from vm_observe: x and y are then pixels of that observation's image and index refers to its control tree; stale_observation refuses old coordinates after VM mutations, lifecycle changes, window identity/geometry changes or significant visual changes near the target. Stable control runtime IDs are re-located after ordinary mutations. Without it x and y are raw guest screen pixels with no checks (sign-in screen, UAC prompt)"`
 	X             int      `json:"x,omitempty" jsonschema:"horizontal pixel; ignored when index is set"`
 	Y             int      `json:"y,omitempty" jsonschema:"vertical pixel; ignored when index is set"`
@@ -40,7 +40,7 @@ type clickIn struct {
 }
 
 type dragIn struct {
-	VM            string   `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM            string   `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ObservationID string   `json:"observation_id,omitempty" jsonschema:"observation_id from vm_observe: from and to are then pixels of that observation's image; stale_observation refuses old coordinates after VM mutations, lifecycle changes, window identity/geometry changes or significant visual changes near the target. Stable control runtime IDs are re-located after ordinary mutations. Without it from and to are raw guest screen pixels with no checks"`
 	From          pointIn  `json:"from" jsonschema:"where the left button goes down"`
 	To            pointIn  `json:"to" jsonschema:"where it comes up"`
@@ -50,7 +50,7 @@ type dragIn struct {
 }
 
 type scrollIn struct {
-	VM            string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM            string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ObservationID string `json:"observation_id,omitempty" jsonschema:"observation_id from vm_observe: x and y are then pixels of that observation's image; stale_observation refuses old coordinates after VM mutations, lifecycle changes, window identity/geometry changes or significant visual changes near the target. Stable control runtime IDs are re-located after ordinary mutations. Without it x and y are raw guest screen pixels with no checks"`
 	X             int    `json:"x"`
 	Y             int    `json:"y"`
@@ -61,7 +61,7 @@ type scrollIn struct {
 }
 
 type setValueIn struct {
-	VM            string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM            string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ObservationID string `json:"observation_id" jsonschema:"observation_id of a vm_observe call with controls: true"`
 	Index         int    `json:"index" jsonschema:"the control's index in that observation's tree"`
 	Value         string `json:"value" jsonschema:"the new value (UI Automation ValuePattern.SetValue)"`
@@ -70,7 +70,7 @@ type setValueIn struct {
 }
 
 type invokeIn struct {
-	VM            string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM            string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	ObservationID string `json:"observation_id" jsonschema:"observation_id of a vm_observe call with controls: true"`
 	Index         int    `json:"index" jsonschema:"the control's index in that observation's tree"`
 	Action        string `json:"action" jsonschema:"Invoke, Toggle, Expand, Collapse, Select, ScrollIntoView, ScrollUp, ScrollDown, ScrollLeft or ScrollRight (case-insensitive); choose from the control's actions in the tree"`
@@ -79,7 +79,7 @@ type invokeIn struct {
 }
 
 type typeTextIn struct {
-	VM            string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM            string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Text          string `json:"text" jsonschema:"the text; newline presses Enter, tab presses Tab"`
 	Handle        uint64 `json:"handle,omitempty" jsonschema:"the window to type into (from vm_windows or vm_observe); a group root is accepted and the input goes to the window of its group that is in the foreground (e.g. AutoCAD's command line). Omit handle, pid and index to type into the foreground window"`
 	PID           uint32 `json:"pid,omitempty" jsonschema:"restrict handle to this process, or alone select the process's only visible window"`
@@ -90,7 +90,7 @@ type typeTextIn struct {
 }
 
 type keyIn struct {
-	VM       string   `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM       string   `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Keys     string   `json:"keys,omitempty" jsonschema:"a key or combination such as enter, ctrl+s, alt+f4; pass either keys or sequence"`
 	Sequence []string `json:"sequence,omitempty" jsonschema:"ordered key combinations, e.g. [ctrl+a, backspace]; at most 256"`
 	Handle   uint64   `json:"handle,omitempty" jsonschema:"the window that must receive the keys (from vm_windows or vm_observe); a group root is accepted and the keys go to the window of its group that is in the foreground. Omit handle and pid to send to the foreground window"`

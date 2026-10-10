@@ -10,7 +10,7 @@ import (
 )
 
 type launchIn struct {
-	VM           string   `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM           string   `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Path         string   `json:"path" jsonschema:"program path in the guest"`
 	Args         []string `json:"args,omitempty" jsonschema:"command-line arguments"`
 	Cwd          string   `json:"cwd,omitempty" jsonschema:"working directory in the guest"`

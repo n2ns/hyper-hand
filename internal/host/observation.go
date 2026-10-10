@@ -13,7 +13,7 @@ import (
 
 // observeIn is vm_observe's input, also used by actions for their after-action observation (observe_after).
 type observeIn struct {
-	VM            string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	VM            string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
 	Handle        uint64 `json:"handle,omitempty" jsonschema:"observe this window (handle from vm_windows or a previous observation): the screenshot is cropped to it and the control tree rooted at it; omit for the whole screen"`
 	PID           uint32 `json:"pid,omitempty" jsonschema:"restrict handle to this process, or select the process's only visible window"`
 	ObservationID string `json:"observation_id,omitempty" jsonschema:"with index, observe this control's subtree; alternative to handle/pid; implies controls; screenshot remains cropped to its window"`
