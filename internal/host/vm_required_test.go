@@ -257,7 +257,7 @@ func TestVMRequiredEveryToolRefusesMissingVM(t *testing.T) {
 					continue
 				}
 				checked++
-				for _, args := range []map[string]any{{}, {"vm": ""}, {"vm": "   "}, {"vm": "\t"}} {
+				for _, args := range []map[string]any{{}, {"vm": ""}, {"vm": "   "}, {"vm": "\t"}, {"vm": nil}} {
 					e, isErr := callRaw(t, ctx, cs, tool.Name, args)
 					vms, _ := e["vms"].([]any)
 					next, _ := e["next"].(string)
@@ -265,6 +265,15 @@ func TestVMRequiredEveryToolRefusesMissingVM(t *testing.T) {
 						!reflect.DeepEqual(vms, []any{"Win10", "Win10-Example"}) || !strings.Contains(next, "Win10") || !strings.Contains(next, "Win10-Example") {
 						t.Errorf("%s %v: %v", tool.Name, args, e)
 					}
+					// Like any other refusal, it carries the task identity.
+					if e["task_id"] == nil || e["task_id"] == "" || e["run_id"] == nil || e["run_id"] == "" {
+						t.Errorf("%s %v: refusal without task identity: %v", tool.Name, args, e)
+					}
+				}
+				// A vm of the wrong type is the input schema's type error, not a missing vm.
+				if e, isErr := callRaw(t, ctx, cs, tool.Name, map[string]any{"vm": 7}); !isErr || e["error"] != codeInvalidArgument ||
+					strings.Contains(fmt.Sprint(e["reason"]), "vm is required") {
+					t.Errorf("%s with vm 7: %v", tool.Name, e)
 				}
 				// Only the VM names were listed for the refusal: no Find, power, checkpoint, input or agent call ran.
 				if calls := b.recorded("ListVMs"); len(calls) != 0 {
@@ -383,6 +392,22 @@ func TestVMRequiredEndTurn(t *testing.T) {
 		}
 		if w, p := b.checkpointIDs("Win10"), b.checkpointIDs("Win10-Example"); len(w) != 2 || len(p) != 2 {
 			t.Fatalf("checkpoints deleted: Win10 %v, Win10-Example %v", w, p)
+		}
+	})
+
+	t.Run("a blank vm is refused, not treated as ending the whole task", func(t *testing.T) {
+		b := newTwoVMBackend("Running")
+		cs := connectTwoVM(t, ctx, b)
+		created, isErr := callRaw(t, ctx, cs, "vm_checkpoint", map[string]any{"vm": "Win10", "label": "mine"})
+		if isErr {
+			t.Fatalf("vm_checkpoint: %v", created)
+		}
+		e, isErr := callRaw(t, ctx, cs, "vm_end_turn", map[string]any{"vm": "  "})
+		if !isErr || e["error"] != codeInvalidArgument || !strings.Contains(fmt.Sprint(e["reason"]), "vm must not be blank") {
+			t.Fatalf("blank vm: %v", e)
+		}
+		if ids := b.checkpointIDs("Win10"); len(ids) != 3 {
+			t.Fatalf("blank vm cleaned up anyway: %v", ids)
 		}
 	})
 

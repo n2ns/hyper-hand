@@ -19,8 +19,8 @@ func TestSchemaErrorsAreStructuredBeforeVMAccess(t *testing.T) {
 		vmCalls++
 		return hyperv.VM{}, nil
 	}})
-	// want is the refusal: "schema" (the input schema, with task identity when wantTask), "vm" (vm missing: refused
-	// before task resolution, with the VM names) or "any" (only invalid_argument is checked).
+	// want is the refusal: "schema" (the input schema) or "vm" (vm missing: refused with the VM names, before any VM
+	// access); wantTask: the refusal carries the task identity.
 	for _, tc := range []struct {
 		name     string
 		args     any
@@ -29,11 +29,12 @@ func TestSchemaErrorsAreStructuredBeforeVMAccess(t *testing.T) {
 	}{
 		{"misspelled required field", map[string]any{"vm": "A", "condition": "unknown", "task_id": "schema-task"}, "schema", true},
 		{"missing required field", map[string]any{"vm": "A", "task_id": "schema-task"}, "schema", true},
-		{"missing vm", map[string]any{"kind": "file_exists", "task_id": "schema-task"}, "vm", false},
+		{"missing vm", map[string]any{"kind": "file_exists", "task_id": "schema-task"}, "vm", true},
+		{"null vm", map[string]any{"kind": "file_exists", "vm": nil, "task_id": "schema-task"}, "vm", true},
 		{"wrong kind type", map[string]any{"vm": "A", "kind": 1, "task_id": "schema-task"}, "schema", true},
 		{"wrong timeout type", map[string]any{"vm": "A", "kind": "file_exists", "timeout_ms": "10", "task_id": "schema-task"}, "schema", true},
-		// A non-string vm currently reads as a missing vm (vmRequired decodes vm as a string before schema validation).
-		{"wrong vm type", map[string]any{"kind": "file_exists", "vm": 1, "task_id": "schema-task"}, "any", false},
+		// A non-string vm is a type error of the input schema, not a missing vm.
+		{"wrong vm type", map[string]any{"kind": "file_exists", "vm": 1, "task_id": "schema-task"}, "schema", true},
 		{"wrong task type", map[string]any{"vm": "A", "kind": "file_exists", "task_id": 1}, "schema", false},
 		{"unknown property", map[string]any{"vm": "A", "kind": "file_exists", "condition": "unknown", "task_id": "schema-task"}, "schema", true},
 		{"null", json.RawMessage(`null`), "vm", false},

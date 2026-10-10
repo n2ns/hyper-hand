@@ -134,7 +134,9 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 	// vm is required everywhere but vm_list and vm_end_turn (see vmRequired): a default VM let a call land on another
 	// VM whenever the intended one was off.
 	hasVM := schema.Properties["vm"] != nil && spec.name != "vm_list"
-	if p := schema.Properties["vm"]; p != nil && spec.name != "vm_list" {
+	if p := schema.Properties["vm"]; p != nil && spec.name == "vm_list" {
+		p.Description = "Ignored: vm_list lists every VM; use its names as vm in the other tools."
+	} else if p != nil {
 		if spec.name == "vm_end_turn" {
 			p.Description = "VM name from vm_list. Omit only to end the whole task (this task's own waits, temporary checkpoints and ownership on every VM); required with all_temp."
 		} else {
