@@ -154,7 +154,7 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 	}
 	// The generic SDK wrapper returns plain text for schema errors before our
 	// handler runs. Validate here so invalid arguments obey the same JSON contract.
-	handler := func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, req *mcp.CallToolRequest) (out *mcp.CallToolResult, _ error) {
 		var in In
 		inputErr := decodeToolArguments(req.Params.Arguments, resolved, &in)
 		var args struct {
@@ -175,6 +175,12 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 		}
 		if task != nil {
 			ctx = context.WithValue(ctx, taskContextKey{}, task)
+			if spec.name != "vm_evidence" {
+				// The task's journal, which vm_evidence exports, records every call with its final result.
+				var end func(*mcp.CallToolResult)
+				ctx, end = task.journal.begin(ctx, spec.name, args.VM, req.Params.Arguments)
+				defer func() { end(out) }()
+			}
 		}
 		// Before any VM is touched: a missing vm is refused with the VM names rather than a generic schema error.
 		// Only for tools whose input has a vm field; a vm of the wrong type is left to the schema error below.

@@ -35,6 +35,8 @@ type taskState struct {
 	session *mcp.ServerSession
 	// lastUsed is when a call of the task last started or returned.
 	lastUsed time.Time
+	// journal records the task's calls for vm_evidence; it ends with the task.
+	journal taskJournal
 }
 
 type taskCall struct {

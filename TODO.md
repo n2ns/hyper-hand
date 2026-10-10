@@ -26,7 +26,7 @@ Stop conditions: a step that needs a user decision, a UAC prompt or work on the 
   Blocked: a checkpoint merge at the 15-minute timeout cannot be produced in a test without a test-only timeout (user decision).
   Blocked: after a blocked graceful shutdown the guest stays in a pending sign-out that no input reaches, so the unsaved document is not recoverable; how `vm_shutdown` should handle this is a product decision. HyperHand itself did not power off.
 - [x] **D. VM save and pause controls** (section 2, P2). Explicit Save and Pause operations and the resume readiness of the agent and desktop; Win10 acceptance of save, pause and resume.
-- [ ] **E. Acceptance evidence export** (section 2, P2). Package versions, environment, steps, assertions, screenshots and file hashes into one reviewable artifact without credentials or unrelated data; produce one for a real Win10 run.
+- [x] **E. Acceptance evidence export** (section 2, P2). Package versions, environment, steps, assertions, screenshots and file hashes into one reviewable artifact without credentials or unrelated data; produce one for a real Win10 run.
 - [ ] **F. Release preparation** (section 4). Migration notes in `CHANGELOG.md` for removed tools/parameters and guest upgrades; build the release package locally and verify packaged and installed versions and hashes. Stop before tagging: publishing is the user's decision.
 
 Not in this plan (need the user or the host desktop): the product decisions in section 5; the host tray Restart menu, host self-uninstall (UAC) and interactive host UAC (section 3); display configurations that change VM settings; VMConnect viewer reconnection (host window); publishing the release.
@@ -51,7 +51,6 @@ These are development candidates, not authorization to implement all of them tog
 
 | Priority | Capability | Minimum delivery and acceptance |
 | --- | --- | --- |
-| P2 | Acceptance evidence export | Package versions, environment, steps, assertions, screenshots and file hashes into a reviewable artifact. Exclude credentials and unrelated data. Current evidence primarily consists of local ignored files. |
 | P2 | VMConnect viewer reconnection | Recover the host viewer after VM lifecycle operations leave it disconnected. Verify viewer recovery separately from guest command and screenshot connectivity; the latter can remain healthy while the viewer is disconnected. |
 
 References: [tool behavior](docs/features.md), [Win10 acceptance](docs/acceptance-20261010.md), and [semantic control acceptance](docs/semantic-acceptance-20261010.md).
@@ -107,6 +106,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 - [x] Guest uninstall and reinstall through paths independent of the agent (Run dialog uninstall, Hyper-V keyboard checks, `vm_install_agent`): registration, files and process removed, then path, hash and communication restored. See the [acceptance record](docs/acceptance-gaps-20261011.md#guest-uninstall-and-reinstall).
 - [x] Hung target windows: actions return `target_not_responding` at once instead of blocking every call to the VM; search and UI waits report the helper timeout as `target_not_responding`. See the [acceptance record](docs/acceptance-gaps-20261011.md#hung-ui-thread).
 - [x] VM save and pause: `vm_save` and `vm_pause`, resumed by `vm_start` with the same readiness wait and `previous_state`; saved and paused VMs (`EnabledState` 6 and 9) are reported by name. See the [contract](docs/features/vm-checkpoints.md#32-vm_start-vm_shutdown-vm_turn_off-vm_save-and-vm_pause) and the [acceptance record](docs/save-pause-acceptance-20261011.md).
+- [x] Acceptance evidence export: every task journals its calls, and `vm_evidence` writes one reviewable zip (versions and hashes, environment, steps, assertions, screenshots, file hashes; only this task and VM; stored unlock password and given strings redacted, secrets under 4 characters skipped and counted). See the [contract](docs/features/clipboard-launch-wait.md#77-vm_evidence) and the [acceptance record](docs/evidence-acceptance-20261011.md).
 - [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; interruption, expiry and old-agent coverage passed (section 1); release remains in section 4.
 
 The old title selectors remain removed. UI waits use HWND/PID, exact control properties or observation-bound runtime identity; they do not restore the legacy title-based interface.

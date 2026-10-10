@@ -1,8 +1,8 @@
-# 7. Clipboard, Launching, Waiting, Turn End and Batches
+# 7. Clipboard, Launching, Waiting, Turn End, Batches and Evidence
 
 Part of [HyperHand features](../features.md). Section numbers such as 8.6 refer to the chapters listed there.
 
-These tools need the agent, except `vm_end_turn` and `vm_batch` (whose steps need what their tools need).
+These tools need the agent, except `vm_end_turn`, `vm_batch` (whose steps need what their tools need) and `vm_evidence` (which uses it only for the agent facts and `files`).
 
 ### 7.1 vm_clipboard_get and vm_clipboard_set
 
@@ -82,3 +82,20 @@ UI conditions use host-side polling with a 300 ms interval between samples. They
   - `failed`: the call was cancelled before a step started.
 - `next` says which steps completed and that nothing was repeated: observe the state and send a new `vm_batch` with only the remaining steps that still apply.
 - `vm_end_turn` waits for a running batch like any call of the task; it cancels a `vm_wait` step that is waiting, which stops the batch with `step_failed`, and steps after it are refused with `task_busy` while the cleanup runs.
+
+### 7.7 vm_evidence
+
+`vm_evidence` exports the current task's work on one VM as one zip on the host, for review of an acceptance run.
+
+- Every task keeps a journal of its tool calls from its first call: the arguments without `task_id`, the final result or error object, start time and duration, and the PNG images. Steps of a `vm_batch` are recorded as calls of their own whose `parent` is the batch's `seq`; the batch's own record keeps its result without the images, which belong to the steps. `vm_evidence` itself is not recorded. The journal holds up to 2000 calls and 128 MiB of images; beyond that the oldest calls, and then the oldest images, are dropped and counted (`omitted`). A result text over 256 KiB is shortened by cutting its long strings (to 4096, 512 or 64 bytes, marked `…[truncated <n> bytes]`) so that it stays valid JSON with its statuses, assertions and file hashes, or cut at 256 KiB if that is not enough; the step has `truncated: true`. The journal ends with the task: call `vm_evidence` before `vm_end_turn`.
+- Parameters: `vm` (required), `title`, `dir` (absolute host directory, created if missing; default `%LOCALAPPDATA%\HyperHand\evidence`), `redact` (strings to replace) and `files` (up to 64 guest paths hashed at export, as `vm_file_info`). A call without a task is refused (`failed`); a relative `dir` or more than 64 `files` is `invalid_argument`.
+- The zip `evidence-<vm>-<task_id>-<yyyyMMdd-HHmmss>.zip` holds:
+  - `evidence.json`: `title`, `created_at`, `task_id`, `run_id`; `host` (`version`, `protocol`, Windows version, SHA-256 of `hyperhand.exe` and `hyperhand-agent.exe` in the running host's directory); `vm` (`name`, `id`, `state`, `checkpoint_type`, `current_checkpoint`); `agent` (version, protocol, hostname, user, from a 5-second ping, or `error`); `steps` (`seq`, `parent`, `tool`, `started_at`, `elapsed_ms`, `ok`, `args`, `result` or `error`, `screenshots`); `assertions`; `files`; `redactions`, `skipped_short_secrets` and `omitted`.
+  - `report.md`: the environment, a table of the calls, the assertions, the files and the screenshots, for a person to read.
+  - `screenshots/<seq>-<tool>-<n>.png`.
+- Only calls of this task whose `vm` names this VM are included. Calls of other tasks, other VMs and calls without a `vm` are not.
+- `assertions` lists every `assert` entry of the `vm_batch` steps with `seq`, `step`, `step_tool`, `condition` and `passed`: `true` for those that held, `false` with `actual` for the one that stopped the batch, `null` for those not evaluated because the batch stopped earlier. A `vm_wait` with `assert: true` is listed with its condition, `passed` `true` or `false` (`assertion_failed`), or `null` when it failed for another reason.
+- `files` holds the entries of every `vm_file_info` call (`source` `call <seq>`) and of `files` (`source` `export`).
+- Redaction: the VM's stored unlock password (see 3.5) and the `redact` strings are replaced with `[redacted]` in every string written to the zip (decoded, so JSON escapes do not hide them; map keys, file facts, agent facts and the task ID included). A secret shorter than 4 characters would replace common letters everywhere and garble the record, so it is left and counted in `skipped_short_secrets`. Screenshots are not redacted.
+- Result: `{"path", "sha256", "bytes", "calls", "screenshots", "assertions": {"passed", "failed", "not_evaluated"}, "files", "redactions", "skipped_short_secrets", "omitted": {"calls", "screenshots"}}`. The zip is written through a temporary file in `dir` and renamed; a write failure is `failed` with `next` asking for a writable `dir`.
+- It is read-only for the VM and needs no write ownership.

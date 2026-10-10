@@ -28,6 +28,7 @@ type vmIn struct {
 //	tools_turn.go     vm_end_turn
 //	tools_doctor.go   vm_doctor
 //	batch.go          vm_batch
+//	evidence.go       vm_evidence (and the task journal it exports)
 type deps struct {
 	s       *mcp.Server
 	m       *Manager
@@ -139,6 +140,7 @@ func NewServer(m *Manager) *mcp.Server {
 	registerJobs(d)
 	registerDoctor(d)
 	registerBatch(d)
+	registerEvidence(d)
 	return s
 }
 
