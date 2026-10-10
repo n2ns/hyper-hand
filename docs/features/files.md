@@ -58,6 +58,8 @@ Both directions write each file to a unique `.hyperhand-*.hhpart` temporary file
 - Success is `status: "complete"` with `plan_id`, `vm`, `completed` changes and empty `pending`. A confirmed failure returns `isError` with `error: "mirror_partial"` (or `"plan_stale"` before mutation), `status`, `completed`, `failed: {path, reason}` and `pending`. If the response cannot be confirmed, `error: "mirror_unknown"`, `status: "unknown"` and `unknown` changes are returned; no completion is inferred. Create a new plan after a failure or uncertain outcome; never replay the consumed apply.
 - Changed bytes use temporary disk space: one payload on the host, the received payload plus staged files on the guest, and a per-file replacement alongside the target. Handled errors/cancellation clean temporary files; abrupt process termination can leave temporary artifacts. A locked destination can fail without deleting later extras. Ordinary copy/pull keep their existing results. A guest without `mirror_scan`/`mirror_apply` returns `agent_outdated`; mirror never falls back to copy.
 
+- Close applications that use the deployment files before applying, and keep logs, drawings and user settings outside a mirrored directory: extra files there are deleted.
+
 The same inventory limits also apply to the intermediate tree after copying but before deletion (the union of source entries and target-only entries). Planning refuses a union that would exceed those limits even if each side separately fits.
 
 Because mirror apply plans are single-use, the `vm_push` tool no longer advertises `idempotentHint`, even though ordinary copy still has its previous semantics. Its static annotation remains destructive; mirror plan is read-only at execution time.

@@ -6,7 +6,7 @@ This document tracks remaining delivery work, unimplemented capabilities and acc
 
 ## 1. Directory mirror delivery
 
-Directory mirroring was implemented in `67ba68d` and pushed to `main`. Ordinary `vm_push` copy behavior is preserved. The new `mode: mirror` uses a read-only plan followed by a single-use apply, including empty directories, drift checks, verified copying and deletion of extra target entries. See the [mirror contract](docs/features/files.md#65-directory-mirror) and [usage guide](docs/user-guide.md#other-tools).
+Directory mirroring was implemented in `67ba68d` and pushed to `main`. Ordinary `vm_push` copy behavior is preserved. The new `mode: mirror` uses a read-only plan followed by a single-use apply, including empty directories, drift checks, verified copying and deletion of extra target entries. See the [mirror contract](docs/features/files.md#65-directory-mirror).
 
 Completed verification: maintained-package race tests and vet, ten consecutive mirror-engine race runs, host and guest builds, independent review, and installed Win10 mirror acceptance. Windows junction rejection, locked-file failure and directory-to-file replacement during deletion were also covered by focused tests. See the [joint acceptance record](docs/ui-wait-mirror-acceptance-20261010.md) for exact runtime coverage and limits.
 

@@ -14,3 +14,32 @@ The exact behavior is split by chapter, one file each. Read the chapter of the t
 - [8. Guest Agent Installation, Update and Diagnostics](features/agent.md): 8.1 vm_install_agent, 8.2 Agent install command, 8.3 Single instance and startup, 8.4 Agent readiness check, 8.5 vm_update_agent, 8.6 Protocol version, 8.7 vm_doctor
 - [9. Host Tray](features/host-tray.md): 9.1 Running, 9.2 install, 9.3 Log
 - [10. Wire Protocol](features/wire-protocol.md): 10.1 Frame format, 10.2 Operations, 10.3 Error behaviour, 10.4 Broker checkpoint operations
+
+## Tools
+
+Every tool except `vm_list` requires `vm`; see 2.3.
+
+| Tool | What it does |
+|---|---|
+| `vm_list`, `vm_start` | List VMs with their state and the task's `run_id`; start and wait until the desktop is usable (unlocking it with the stored password) |
+| `vm_shutdown`, `vm_turn_off` | Shut the guest down normally and wait until the VM is off (fails, without turning it off, if a program blocks shutdown); turn the VM off immediately, like pulling the plug |
+| `vm_status`, `vm_unlock`, `vm_doctor` | Report power state, agent, session lock state and whether an unlock password is stored; unlock a locked session with the stored password; run read-only host and guest checks with a suggestion per problem |
+| `vm_checkpoints`, `vm_checkpoint` | List the checkpoint tree (`id`, `name`, `parent`, `type`, `kind`, `state`, `current`, `children`, plus the VM's `checkpoint_type` and `current_parent`); create one named `<run_id>-temp-<label>` (or `-keep-` with `keep: true`) and return its `id` |
+| `vm_restore` | Restore a checkpoint by `id` (or by `name` when it is unique) and start the VM unless `start` is false; `save_current: true` first saves the current state as a `temp` checkpoint |
+| `vm_checkpoint_keep`, `vm_checkpoint_delete` | Rename a `temp` checkpoint to `keep` so that `vm_end_turn` leaves it alone; delete a checkpoint by `id` (`manual` ones by `id` only), with `subtree: true` its whole branch, waiting for Hyper-V to merge the disks |
+| `vm_windows` | List visible windows: handle, title, class, process, rect, enabled, foreground, owner, `group_root`, `integrity`; plus the foreground handle, the focused control and the session state |
+| `vm_observe` | The observation entry point: PNG of the screen or of one window (`handle`), the focused control, `selected_text` and with `controls: true` the indexed control tree (`diff_from` for changes only); returns an `observation_id` |
+| `vm_find_controls` | Bounded control search by AutomationId, name or type; returns actionable indexes and explicit unique/multiple/not-found/incomplete status |
+| `vm_click`, `vm_drag`, `vm_scroll` | Mouse at image pixels of an `observation_id`, or at a control `index` (`vm_click`); `button`, `count`, `modifiers`, `delta_y`/`delta_x`; without an observation, raw screen pixels |
+| `vm_set_value`, `vm_invoke` | Set a control's value, Invoke, Toggle, Expand, Collapse, Select, ScrollIntoView, or ScrollUp/Down/Left/Right by its observation `index`; returns actual `state` and read-back `verified` (unknown outcomes remain null) |
+| `vm_type`, `vm_key` | Type Unicode text into a window (`handle`/`pid`, or an observation `index` to focus first) as key events, never through the clipboard; press one key combination or a `sequence` (numeric keypad and X11-style names included) |
+| `vm_apps` | Find launchable desktop applications by name or executable path; return stable IDs, `launch` arguments for `vm_launch`, running state and visible window handles |
+| `vm_launch` | Start a program detached and return its `pid` and first window's `handle`, `title` and `class` |
+| `vm_exec` | Run a command to completion in the guest; `shell`, `cwd`, `timeout_ms`, `admin`; `background: true` starts it as a job and returns its `id` at once |
+| `vm_job` | Read a background job's state and output incrementally (`stdout_offset`/`stderr_offset`, `wait_ms`), cancel its process tree, or list the agent's jobs; jobs survive reconnects and host restarts |
+| `vm_push`, `vm_pull` | Copy files or directories host to guest and back; `vm_push` skips unchanged files unless `force` is true. `mode: mirror` synchronizes exact directory contents with `phase: plan` then `phase: apply` and the returned `plan_id` |
+| `vm_file_info` | Check up to 64 guest paths in one call (environment variables such as `%APPDATA%` expanded): existence, file or directory, size, SHA-256, PE `ProductVersion` and modification time; read-only |
+| `vm_clipboard_get`, `vm_clipboard_set` | Read or write the guest clipboard |
+| `vm_wait` | Wait for a process, file or UI condition; check or assert window/control state |
+| `vm_end_turn` | End this task's work: cancel its waits, clean up its temporary checkpoints and release its VM ownership; `vm` limits cleanup to one VM |
+| `vm_install_agent`, `vm_update_agent` | Install or replace the guest agent |
