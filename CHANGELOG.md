@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Removed
 
+- `scripts/restart-tray.ps1`, which installed a build with a UAC prompt. Development installs use `scripts/dev-install.ps1` (no UAC, through the preauthorized `HyperHand Dev Install` task registered once with `scripts/dev-install-setup.ps1`).
 - `vm_screenshot`: replaced by `vm_observe`. There is no `source`, `region` or coordinate metadata to apply; actions take image pixels of an observation.
 - `vm_controls`: replaced by `vm_observe` with `controls: true`, which returns the tree as indexed text instead of JSON nodes.
 - `vm_focus_window`: actions activate their target window themselves (`activate`, default `true`).

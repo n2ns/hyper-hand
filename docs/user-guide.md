@@ -195,7 +195,7 @@ Where UAC prompts appear, and where they do not:
 | `hyperhand.exe uninstall` | Host | Once; it relaunches itself elevated. |
 | Starting the installed `hyperhand.exe`, at logon or by hand | Host | None. The tray runs as the ordinary user. |
 | Restarting from the tray menu | Host | None. Only the tray/MCP process restarts; active requests are interrupted. |
-| Updating with `scripts\restart-tray.ps1` | Host | Once per update; the script invokes the installer. This is not the tray-only restart action. |
+| Development installs with `scripts\dev-install.ps1` | Host | None, through the preauthorized task `HyperHand Dev Install`. Registering that task once (`scripts\dev-install-setup.ps1`, elevated) is the only prompt. |
 | `vm_install_agent`, `hyperhand-agent.exe install`, `hyperhand-agent.exe uninstall`, `vm_update_agent`, the agent at logon | Guest | None. The agent runs as the logged-on user, not elevated. |
 | `vm_exec` with `admin: true` | Guest | None if `ConsentPromptBehaviorAdmin` is `0` (see [Allow `admin` exec without a prompt](#allow-admin-exec-without-a-prompt)); otherwise a prompt that the command waits for. |
 | A program started in the guest that asks for elevation | Guest | As configured in the guest; answer it from the host with `vm_observe` and `vm_key` (or `vm_click` with raw screen pixels). |
@@ -283,20 +283,21 @@ The examples in [docs/hooks/](hooks/) call `vm_end_turn` without arguments, so w
 
 ### From source
 
-1. Rebuild both executables in `build`. The running service and tray use the installed copies under `%ProgramFiles%\HyperHand`:
+1. Once per machine and developer, register the development install task from an elevated PowerShell (the only UAC prompt):
 
    ```
-   go build -ldflags "-H windowsgui" -o build\hyperhand.exe .\cmd\hyperhand
-   go build -ldflags "-H windowsgui" -o build\hyperhand-agent.exe .\cmd\hyperhand-agent
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-install-setup.ps1
    ```
 
-2. Run the update wrapper and approve the installer's UAC prompt:
+   It registers `HyperHand Dev Install`: an on-demand task without triggers that runs `build\dev-install\hyperhand.exe install --quiet` of this checkout with your elevated token. Anyone who can replace that file and start the task runs code as an administrator; remove the task with `-Mode Remove` when you no longer develop HyperHand on this machine. An existing task of that name that runs something else is never replaced.
+
+2. Build and install without UAC:
 
    ```
-   scripts\restart-tray.ps1
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-install.ps1
    ```
 
-   The script invokes `install` for the built executables. Despite its historical name, it deploys a build; use the tray's restart action when you only need to reconnect MCP without changing files. It does not terminate all processes by executable name.
+   It builds both executables into `build\dev-install` (version `dev-<time>-<commit>`), starts the task, waits for it, and checks that the installed files equal the build, the service runs and one installed tray process is up. `-NoBuild` installs the files already there. On failure it prints the installer's last log lines; if the service is left stopped, running it again with `-NoBuild` restores it. Installing interrupts active MCP connections. It does not terminate processes by executable name.
 
 3. Ask the AI to call `vm_update_agent`. The host sends the `hyperhand-agent.exe` next to `hyperhand.exe` to the running agent, which replaces itself, restarts, and is pinged until it answers (up to 30 seconds). Repeat for each VM.
 
