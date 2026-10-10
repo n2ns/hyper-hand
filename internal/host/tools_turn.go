@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -129,6 +130,9 @@ func registerTurn(d *deps) {
 			}
 			var err error
 			cancelled, err = task.beginEnd(ctx, in.VM)
+			if errors.Is(err, errTaskEnded) {
+				return jsonResult(endTurnOut{DeletedCheckpoints: []string{}, Skipped: []skippedCheckpoint{}, Errors: []string{}})
+			}
 			if err != nil {
 				return nil, err
 			}

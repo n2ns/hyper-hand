@@ -108,6 +108,7 @@ type statusOut struct {
 	VM             string         `json:"vm"`
 	Power          string         `json:"power"`
 	UnlockPassword string         `json:"unlock_password"` // stored, not stored, unknown
+	Owner          *vmOwner       `json:"owner"`           // the task holding write ownership; null when none does
 	Agent          *statusAgent   `json:"agent,omitempty"`
 	Session        *statusSession `json:"session,omitempty"`
 	SessionError   string         `json:"session_error,omitempty"`
@@ -238,12 +239,16 @@ func registerVM(d *deps) {
 		}
 		return jsonResult(startOut{VM: v.Name, State: "running", Desktop: "usable", Agent: agentOf(r.Agent), Unlocked: r.Unlocked})
 	})
-	addToolIn(d, toolSpec{name: "vm_status", desc: "Report a VM's power state, whether an unlock password is stored and, when it runs, the guest agent (state ok, busy or not_answering; version, protocol, user) and its session (locked, console, uac_prompt). Does not wait or change anything.", readOnly: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
+	addToolIn(d, toolSpec{name: "vm_status", desc: "Report a VM's power state, whether an unlock password is stored, which task holds its write ownership (owner: {task_id, idle_ms, in_flight, this_task}, null when free; in_flight counts this call when this_task) and, when it runs, the guest agent (state ok, busy or not_answering; version, protocol, user) and its session (locked, console, uac_prompt). Does not wait or change anything.", readOnly: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM)
 		if err != nil {
 			return nil, vmErr(err)
 		}
 		out := statusOut{VM: v.Name, Power: powerState(v.State)}
+		if d.tasks != nil {
+			self, _ := ctx.Value(taskContextKey{}).(*taskState)
+			out.Owner = d.tasks.owner(v.Name, self)
+		}
 		_, _, stored, credErr := credential.Read(v.Name)
 		out.UnlockPassword = map[bool]string{true: "stored", false: "not stored"}[stored]
 		if credErr != nil {
