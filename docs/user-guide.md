@@ -1,6 +1,6 @@
 # User Guide
 
-This guide covers downloading or building HyperHand, installing the host tray and the guest agent, connecting an MCP client (Claude Code, Codex or another client), updating, releasing, uninstalling, and troubleshooting.
+This guide covers downloading HyperHand, installing the host tray and the guest agent, connecting an MCP client (Claude Code, Codex or another client), using the tools, updating, uninstalling, and troubleshooting. Building from source, development installs and releasing are in [Building HyperHand](building.md).
 
 HyperHand has two executables and three roles:
 
@@ -12,21 +12,13 @@ HyperHand has two executables and three roles:
 
 - Host: Windows 10 or Windows 11 Pro or Enterprise with Hyper-V enabled. Installation, updates and uninstallation require administrator approval; normal tray startup and restart do not.
 - Guest: a Windows VM with a user logged on to the desktop.
-- Go 1.27 or later, only to build from source.
 - VMConnect in basic session mode. In an enhanced session, the guest user session moves to RDP, and the host-side screenshot and input reach the console session, which shows the lock screen. Switch with View > Enhanced Session in VMConnect, or close VMConnect while HyperHand is working.
 
-## 1. Download or build
+## 1. Download
 
 Download `hyperhand-X.Y.Z-windows-amd64.zip` from [Releases](https://github.com/n2ns/hyper-hand/releases). It contains `hyperhand.exe`, `hyperhand-agent.exe` (both Windows amd64, with the version stamped in), `README.md` and `CHANGELOG.md`. Extract both executables to the same folder. The installer copies them to `%ProgramFiles%\HyperHand`; the logon task uses that installed copy.
 
-To build from source instead, from the repository root:
-
-```
-go build -ldflags "-H windowsgui" -o build\hyperhand.exe .\cmd\hyperhand
-go build -ldflags "-H windowsgui" -o build\hyperhand-agent.exe .\cmd\hyperhand-agent
-```
-
-`-H windowsgui` builds both as GUI programs, so no console window appears. A source build reports its version as `dev`.
+To build from source instead, see [Building HyperHand](building.md#build).
 
 Keep `hyperhand-agent.exe` in the same directory as `hyperhand.exe` when installing or updating. Guest installation and update use the installed agent executable.
 
@@ -204,7 +196,40 @@ Host-side screenshots and input work on the guest's secure desktop, so a guest U
 
 ## Using the tools
 
-Every result is one JSON object; `vm_observe` and actions that observe afterwards put a PNG before it. Every refusal is an error result whose text is `{"error": "<code>", "reason": "...", "next": "...", "run_id": "...", ...}`: `next` names the call that makes progress, the other fields carry the handles and facts it needs. The codes are listed in [features.md](features.md#22-error-object-and-codes).
+### Tool list
+
+Every tool except `vm_list` requires `vm` (the VM name from `vm_list`); there is no default VM. A call without it is refused with `invalid_argument` and the VM names in `next` and `vms`. Only `vm_end_turn` may omit it, to end the whole task (as the Stop hook examples do); `all_temp: true` requires it.
+
+| Tool | What it does |
+|---|---|
+| `vm_list`, `vm_start` | List VMs with their state and the task's `run_id`; start and wait until the desktop is usable (unlocking it with the stored password) |
+| `vm_shutdown`, `vm_turn_off` | Shut the guest down normally and wait until the VM is off (fails, without turning it off, if a program blocks shutdown); turn the VM off immediately, like pulling the plug |
+| `vm_status`, `vm_unlock`, `vm_doctor` | Report power state, agent, session lock state and whether an unlock password is stored; unlock a locked session with the stored password; run read-only host and guest checks with a suggestion per problem |
+| `vm_checkpoints`, `vm_checkpoint` | List the checkpoint tree (`id`, `name`, `parent`, `type`, `kind`, `state`, `current`, `children`, plus the VM's `checkpoint_type` and `current_parent`); create one named `<run_id>-temp-<label>` (or `-keep-` with `keep: true`) and return its `id` |
+| `vm_restore` | Restore a checkpoint by `id` (or by `name` when it is unique) and start the VM unless `start` is false; `save_current: true` first saves the current state as a `temp` checkpoint |
+| `vm_checkpoint_keep`, `vm_checkpoint_delete` | Rename a `temp` checkpoint to `keep` so that `vm_end_turn` leaves it alone; delete a checkpoint by `id` (`manual` ones by `id` only), with `subtree: true` its whole branch, waiting for Hyper-V to merge the disks |
+| `vm_windows` | List visible windows: handle, title, class, process, rect, enabled, foreground, owner, `group_root`, `integrity`; plus the foreground handle, the focused control and the session state |
+| `vm_observe` | The observation entry point: PNG of the screen or of one window (`handle`), the focused control, `selected_text` and with `controls: true` the indexed control tree (`diff_from` for changes only); returns an `observation_id` |
+| `vm_find_controls` | Bounded control search by AutomationId, name or type; returns actionable indexes and explicit unique/multiple/not-found/incomplete status |
+| `vm_click`, `vm_drag`, `vm_scroll` | Mouse at image pixels of an `observation_id`, or at a control `index` (`vm_click`); `button`, `count`, `modifiers`, `delta_y`/`delta_x`; without an observation, raw screen pixels |
+| `vm_set_value`, `vm_invoke` | Set a control's value, Invoke, Toggle, Expand, Collapse, Select, ScrollIntoView, or ScrollUp/Down/Left/Right by its observation `index`; returns actual `state` and read-back `verified` (unknown outcomes remain null) |
+| `vm_type`, `vm_key` | Type Unicode text into a window (`handle`/`pid`, or an observation `index` to focus first) as key events, never through the clipboard; press one key combination or a `sequence` (numeric keypad and X11-style names included) |
+| `vm_apps` | Find launchable desktop applications by name or executable path; return stable IDs, `launch` arguments for `vm_launch`, running state and visible window handles |
+| `vm_launch` | Start a program detached and return its `pid` and first window's `handle`, `title` and `class` |
+| `vm_exec` | Run a command to completion in the guest; `shell`, `cwd`, `timeout_ms`, `admin`; `background: true` starts it as a job and returns its `id` at once |
+| `vm_job` | Read a background job's state and output incrementally (`stdout_offset`/`stderr_offset`, `wait_ms`), cancel its process tree, or list the agent's jobs; jobs survive reconnects and host restarts |
+| `vm_push`, `vm_pull` | Copy files or directories host to guest and back; `vm_push` skips unchanged files unless `force` is true. `mode: mirror` synchronizes exact directory contents with `phase: plan` then `phase: apply` and the returned `plan_id` |
+| `vm_file_info` | Check up to 64 guest paths in one call (environment variables such as `%APPDATA%` expanded): existence, file or directory, size, SHA-256, PE `ProductVersion` and modification time; read-only |
+| `vm_clipboard_get`, `vm_clipboard_set` | Read or write the guest clipboard |
+| `vm_wait` | Wait for a process, file or UI condition; check or assert window/control state |
+| `vm_end_turn` | End this task's work: cancel its waits, clean up its temporary checkpoints and release its VM ownership; `vm` limits cleanup to one VM |
+| `vm_install_agent`, `vm_update_agent` | Install or replace the guest agent |
+
+The host screenshot, raw mouse and keyboard input (actions without `observation_id`, `handle` or `pid`), VM and checkpoint tools work without the agent; window lists, control trees, control search, targeted actions, Unicode text, launching, commands and files need it. Without the agent, `vm_start` still starts the VM but reports that the desktop is not usable.
+
+### Results and errors
+
+Every result is one JSON object; `vm_observe` and actions that observe afterwards put a PNG before it. Every refusal is an error result whose text is `{"error": "<code>", "reason": "...", "next": "...", "run_id": "...", ...}`: `next` names the call that makes progress, the other fields carry the handles and facts it needs. The codes are listed in [features.md](features/results-errors.md#22-error-object-and-codes).
 
 ### Observing and acting
 
@@ -239,7 +264,7 @@ Inspect the returned `changes` and `summary`, including every deletion, then rep
 
 The plan is read-only and does not take VM write ownership. Apply takes ownership like ordinary uploads. Use the same task ID, paths and `force` value; plans expire after 10 minutes, are lost on host restart or task cleanup, and only the newest 16 plans are retained across tasks. Applying consumes the plan, even on failure. `plan_stale` means the plan can no longer be used. `mirror_partial` includes `completed`, `failed` and `pending`; `mirror_unknown` means the response was lost or unrecognized and the listed changes have unknown outcomes. In every case, create a new plan before continuing. Mirror requires an updated guest agent; `agent_outdated` asks for `vm_update_agent`, never silently falls back to copying.
 
-Mirror stages changed file bytes on the host and guest, so leave temporary disk space available. It is not a whole-directory transaction or a file-lock workaround: close applications using the deployment files before applying. Details and limits are in [Directory mirror](features.md#65-directory-mirror).
+Mirror stages changed file bytes on the host and guest, so leave temporary disk space available. It is not a whole-directory transaction or a file-lock workaround: close applications using the deployment files before applying. Details and limits are in [Directory mirror](features/files.md#65-directory-mirror).
 
 - `vm_type` types Unicode text as key events in the user's session (`\n` presses Enter, `\t` Tab) and never touches the clipboard. Without a target it falls back to the Hyper-V keyboard for ASCII text when the agent is absent or its session is locked or on the secure desktop. With `observation_id` and `index` it reads the control back afterwards: `verified` says whether its `value` contains the typed text. The result has `applied_chars` and `total_chars`; a stop midway is `partial_input` with the same counts. Inspect the window before retyping; never retry blindly. Input popups of the target that take the foreground while you type, such as AutoCAD's dynamic-input tooltip at the cursor, keep receiving the text; a dialog, palette or other window stops it. A dialog opened by an Enter appears after the agent has already typed what follows, and the application may drop those characters: end the call at an Enter that opens a dialog, then act on the dialog.
 - `vm_key` takes either `keys`, such as `ctrl+s`, or `sequence`, such as `["ctrl+a", "backspace"]` (up to 256 combinations). Key names include the numeric keypad (`num0`, `numenter`, ...), `f1` to `f20` and X11-style aliases (`Return`, `Escape`, `KP_Enter`); use `plus` for the `+`/`=` key, for example `ctrl+plus`. With `handle` the sequence stops as soon as another window takes the foreground (`partial_input`).
@@ -248,7 +273,7 @@ Mirror stages changed file bytes on the host and guest, so leave temporary disk 
 - For commands that run minutes (test suites, capability checks), call `vm_exec` with `background: true`: it returns a job `id` at once (default timeout 1 hour, at most 24 hours). Then call `vm_job {"vm":"Win10","job_id":"<id>","wait_ms":30000}` repeatedly, passing the previous result's `stdout_next` and `stderr_next` as `stdout_offset` and `stderr_offset`, until `complete` is `true`; `state` and `exit_code` give the outcome. `vm_job` with `cancel: true` terminates the job's process tree. A job survives a lost connection, a new task and a host restart, so a script can collect the result later with the same `id` (reading needs no write ownership); restarting the agent (`vm_update_agent`, reboot) forgets the job (`no_job`) without stopping it. `vm_job` without `job_id` lists the agent's jobs.
 - `vm_push` and `vm_pull` copy a file or a directory recursively. A single file pushed to a guest path ending in `\` goes into that directory under its own name; a single file pulled to an existing host directory, or to a path ending in `\`, goes into it under the guest file's name. `vm_push` skips files whose SHA-256 already matches the guest copy unless `force` is true. Files are written to unique `.hyperhand-*.hhpart` temporary files in the destination directory and renamed when complete.
 - `vm_file_info` checks guest files without copying them, for example after an installation: `vm_file_info {"vm":"Win10","paths":["%ProgramFiles%\App\app.exe","%APPDATA%\App\settings.json"]}` returns per path `exists`, `type` (`file` or `dir`), `size`, `sha256`, the PE `version` (ProductVersion) when the file has one, and `modified` (UTC). Environment variables are expanded as the logged-on guest user; `resolved` shows the result. A missing path is `exists: false`, not an error; a locked or unreadable file has `exists: true` and an `error` for that entry. Up to 64 paths per call; it is read-only and needs no write ownership.
-- `vm_wait` waits for `process_exit` or `process_running` (with `name`, for example `notepad`) or `file_exists` (with `path`, for example `C:\temp\app\done.txt`). UI kinds are `window_exists`, `window_gone`, `window_foreground`, `control_exists`, `control_gone` and `control_matches`. Select a window by `handle`/`pid`; select a control by `observation_id`/`index` or by `handle`/`pid` plus exact `automation_id`/`control_name`. For example, `{"vm":"Win10","kind":"control_matches","handle":123,"automation_id":"status","enabled":true,"value":"Ready","timeout_ms":10000,"assert":true}` waits for the selected control to become enabled with the exact value `Ready`. Use actual handles and control properties from your VM. `check_only: true` samples once; `assert: true` returns `assertion_failed` if unsatisfied. The default timeout is 60 seconds; ordinary expiration returns `satisfied: false`. UI results include `last` with actual state or an uncertainty reason. Unknown or truncated data does not establish a match or disappearance. See the [full wait contract](features.md#73-vm_wait).
+- `vm_wait` waits for `process_exit` or `process_running` (with `name`, for example `notepad`) or `file_exists` (with `path`, for example `C:\temp\app\done.txt`). UI kinds are `window_exists`, `window_gone`, `window_foreground`, `control_exists`, `control_gone` and `control_matches`. Select a window by `handle`/`pid`; select a control by `observation_id`/`index` or by `handle`/`pid` plus exact `automation_id`/`control_name`. For example, `{"vm":"Win10","kind":"control_matches","handle":123,"automation_id":"status","enabled":true,"value":"Ready","timeout_ms":10000,"assert":true}` waits for the selected control to become enabled with the exact value `Ready`. Use actual handles and control properties from your VM. `check_only: true` samples once; `assert: true` returns `assertion_failed` if unsatisfied. The default timeout is 60 seconds; ordinary expiration returns `satisfied: false`. UI results include `last` with actual state or an uncertainty reason. Unknown or truncated data does not establish a match or disappearance. See the [full wait contract](features/clipboard-launch-wait.md#73-vm_wait).
 - `vm_start` returns once the desktop is usable; if it fails, the VM may still be running, and the error says why (`agent_required`: no agent answer; `agent_outdated`: run `vm_update_agent`; `session_unusable`: locked without a stored password, or the unlock failed). `vm_status` reports the state without changing anything (`agent.state` `busy` means another request of this host holds the agent connection; `not_answering` does not prove the agent is offline); `vm_unlock` unlocks a session that was locked later.
 - Checkpoints have their own section below.
 - `vm_doctor` runs read-only checks on the host (service, MCP listener, service pipe, Hyper-V socket registration, enhanced session mode) and the VM (power, agent version and protocol, session, agent integrity) and gives a suggestion for every `warn` or `fail`. Run it first when anything looks wrong.
@@ -284,36 +309,7 @@ The examples in [docs/hooks/](hooks/) call `vm_end_turn` without arguments, so w
 
 ### From source
 
-1. Once per machine and developer, register the development install task from an elevated PowerShell (the only UAC prompt):
-
-   ```
-   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-install-setup.ps1
-   ```
-
-   It registers `HyperHand Dev Install`: an on-demand task without triggers that runs `build\dev-install\hyperhand.exe install --quiet` of this checkout with your elevated token. Anyone who can replace that file and start the task runs code as an administrator; remove the task with `-Mode Remove` when you no longer develop HyperHand on this machine. An existing task of that name that runs something else is never replaced.
-
-2. Build and install without UAC, from the repository root:
-
-   ```
-   go run ./cmd/hyperhand dev-install
-   ```
-
-   It builds both executables into `build\dev-install` (version `dev-<yyyyMMdd-HHmmss>-<commit>`, with `-dirty` when `cmd`, `internal`, `go.mod` or `go.sum` have uncommitted changes), starts the task, waits for it (`--timeout`, default 180 seconds), and checks that the installed files equal the build, the service runs and one installed tray process is up. It prints progress and a final result line, writes errors to stderr and exits with a nonzero code on failure. `--no-build` installs the files already there. On failure it prints the installer's last log lines; if the service is left stopped, running it again with `--no-build` restores it. Installing interrupts active MCP connections. It does not terminate processes by executable name.
-
-3. Ask the AI to call `vm_update_agent`. The host sends the `hyperhand-agent.exe` next to `hyperhand.exe` to the running agent, which replaces itself, restarts, and is pinged until it answers (up to 30 seconds). Repeat for each VM.
-
-`vm_update_agent` needs a running agent. If the agent does not answer, use `vm_install_agent` instead.
-
-## Releasing
-
-For maintainers. Add a section for the version to `CHANGELOG.md`, commit, and push a tag:
-
-```
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Pushing a `vX.Y.Z` tag runs a GitHub Actions workflow that runs the tests, builds `hyperhand.exe` and `hyperhand-agent.exe` for Windows amd64 with the version stamped in, and publishes a GitHub Release with `hyperhand-X.Y.Z-windows-amd64.zip` (both exes, `README.md` and `CHANGELOG.md`). The release notes are the version's section of `CHANGELOG.md`.
+See [Install a development build](building.md#install-a-development-build).
 
 ## Uninstalling
 

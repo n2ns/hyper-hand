@@ -2,7 +2,7 @@
 
 ## Change
 
-Every tool except `vm_list` now requires an explicit `vm`; the default ("the only running VM, or the only VM if none is running") is gone. `vm_end_turn` may still omit `vm` to end the whole task (only the task's own waits, temporary checkpoints and ownership), but `all_temp: true` requires `vm`, and a whitespace-only `vm` is refused. Contract: [features.md 2.3](features.md#23-vm-selection); migration: [CHANGELOG](../CHANGELOG.md#unreleased).
+Every tool except `vm_list` now requires an explicit `vm`; the default ("the only running VM, or the only VM if none is running") is gone. `vm_end_turn` may still omit `vm` to end the whole task (only the task's own waits, temporary checkpoints and ownership), but `all_temp: true` requires `vm`, and a whitespace-only `vm` is refused. Contract: [features.md 2.3](features/results-errors.md#23-vm-selection); migration: [CHANGELOG](../CHANGELOG.md#unreleased).
 
 Reason: the host now has two VMs, `Win10` (HyperHand development) and `Win10-Example` (Example testing). With a default, a call meant for a VM that was off reached the other one, including `vm_restore`, `vm_shutdown`, `vm_turn_off` and `vm_exec`; `vm_end_turn` with `all_temp` and no `vm` deleted temporary checkpoints on every VM.
 

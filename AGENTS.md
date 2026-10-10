@@ -4,7 +4,7 @@
 
 - HyperHand is an MCP server that lets AI agents see and operate Windows virtual machines on Hyper-V.
 - The callers and the readers of every result are AI agents, not people. Design tool descriptions, return text and error messages for AI usability: as few calls per task as possible, machine-readable results that carry the facts the next call needs (actual handles, coordinates and so on), errors that state the cause and the next action. Make these trade-offs yourself; do not ask the user about them as if they were human UI preferences.
-- Architecture, the tool list and exact behavior are in `README.md`, `docs/user-guide.md` and `docs/features.md`.
+- What HyperHand does is in `README.md` (written for human readers), the tool list and usage in `docs/user-guide.md`, the exact behavior in `docs/features/<chapter>.md` (index `docs/features.md`: read only the chapter of the tool or area you work on), building, testing, development installs and releasing in `docs/building.md`.
 
 ## Test VMs are disposable
 
@@ -31,4 +31,4 @@ go run ./cmd/hyperhand dev-install    # builds this checkout and installs it on 
 - Never kill processes by name (`taskkill /IM`, `Stop-Process -Name`); the installer owns service and tray replacement.
 - Do not add PowerShell or batch to the installer (`cmd/hyperhand/setup_*.go`).
 - When a change to `internal/proto` alters what the host and agent exchange, increment `proto.Protocol`; the host refuses older agents with `agent_outdated` and there is no compatibility path.
-- A behavior change updates `docs/features.md` (the exact behavior), `docs/user-guide.md` where usage changes, and `[Unreleased]` in `CHANGELOG.md` (Keep a Changelog format), in the same commit. Releasing: see the Releasing section of `docs/user-guide.md`.
+- A behavior change updates the chapter in `docs/features/` that holds the exact behavior, `docs/user-guide.md` where usage changes, and `[Unreleased]` in `CHANGELOG.md` (Keep a Changelog format), in the same commit. Releasing: see the Releasing section of `docs/building.md`.

@@ -1,6 +1,6 @@
 # Draws hyperhand.ico, the screen icon of hyperhand.exe, its tray icon and settings window (Pillow), and preview.png.
 # Sizes 256 and 48 are drawn large and scaled down; 32, 24 and 16 are placed pixel by pixel.
-# Regenerate the resources afterwards, in cmd/hyperhand: go-winres make --in winres/winres.json --arch amd64
+# Regenerate the resources afterwards, in cmd/hyperhand and again in cmd/hyperhand-agent: go-winres make --in winres/winres.json --arch amd64
 
 from PIL import Image, ImageDraw
 W = (255, 255, 255, 255)

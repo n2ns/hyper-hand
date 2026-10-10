@@ -6,7 +6,7 @@ This document tracks remaining delivery work, unimplemented capabilities and acc
 
 ## 1. Directory mirror delivery
 
-Directory mirroring was implemented in `67ba68d` and pushed to `main`. Ordinary `vm_push` copy behavior is preserved. The new `mode: mirror` uses a read-only plan followed by a single-use apply, including empty directories, drift checks, verified copying and deletion of extra target entries. See the [mirror contract](docs/features.md#65-directory-mirror) and [usage guide](docs/user-guide.md#other-tools).
+Directory mirroring was implemented in `67ba68d` and pushed to `main`. Ordinary `vm_push` copy behavior is preserved. The new `mode: mirror` uses a read-only plan followed by a single-use apply, including empty directories, drift checks, verified copying and deletion of extra target entries. See the [mirror contract](docs/features/files.md#65-directory-mirror) and [usage guide](docs/user-guide.md#other-tools).
 
 Completed verification: maintained-package race tests and vet, ten consecutive mirror-engine race runs, host and guest builds, independent review, and installed Win10 mirror acceptance. Windows junction rejection, locked-file failure and directory-to-file replacement during deletion were also covered by focused tests. See the [joint acceptance record](docs/ui-wait-mirror-acceptance-20261010.md) for exact runtime coverage and limits.
 
@@ -54,7 +54,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 
 ## 4. Release and verification workflow
 
-- [ ] Publish a release containing the current AI-oriented tool surface, protocol generation 2, semantic actions, directory mirroring, UI waits/assertions, and control search/subtree observation. They remain under [Unreleased](CHANGELOG.md#unreleased). Include migration notes for removed tools/parameters and guest upgrade requirements; verify packaged and installed binary versions/hashes.
+- [ ] Publish a release containing the current AI-oriented tool surface, the new guest protocol generation, semantic actions, directory mirroring, UI waits/assertions, and control search/subtree observation. They remain under [Unreleased](CHANGELOG.md#unreleased). Include migration notes for removed tools/parameters and guest upgrade requirements; verify packaged and installed binary versions/hashes.
 - [ ] Keep historical local Go experiments out of the default package-discovery path so that `go test -race ./...` can run cleanly in this workspace. The existing ignored `build/acceptance-20261010-full` and `build/service-poc-20261006/service` contain incompatible old sources. Current maintained packages pass `go test -race ./cmd/... ./internal/...`; that is not a passing full `./...` result. Preserve unrelated artifacts when addressing the test layout.
 
 ## 5. Product scope decisions
@@ -74,8 +74,8 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 - [x] Minimal official client: `client/hyperhand_client.py` (module and command; stable task ID, `key=value` arguments, UTF-8 JSON, errors as failures, saved images, control search). See [client/README.md](client/README.md).
 - [x] Required `vm` on every tool except `vm_list` (no default VM; `all_temp` needs `vm`), so a call meant for a VM that is off never reaches another one. Installed-host acceptance with `Win10` and `Win10-Example`: see the [acceptance record](docs/vm-required-acceptance-20261010.md).
 - [x] UIA semantic actions, state readback and four-direction semantic scrolling; custom-provider coverage remains bounded by the acceptance records.
-- [x] UI condition waits and assertions: six window/control kinds, exact enabled/value/state matching, one-shot checks, timeout/cancellation, unknown-state protection and concurrent actions. See the [wait contract](docs/features.md#73-vm_wait).
-- [x] Control search and subtree observation: bounded exact property search, explicit unique/multiple/not-found/incomplete results, subtree diff isolation and direct use of returned identities by actions and waits. Installed Win10 acceptance covered a 2234-node fixture and the real AutoCAD Options tab/Cancel workflow. See the [search contract](docs/features.md#control-search-and-subtree-observation) and [acceptance record](docs/control-search-acceptance-20261010.md).
+- [x] UI condition waits and assertions: six window/control kinds, exact enabled/value/state matching, one-shot checks, timeout/cancellation, unknown-state protection and concurrent actions. See the [wait contract](docs/features/clipboard-launch-wait.md#73-vm_wait).
+- [x] Control search and subtree observation: bounded exact property search, explicit unique/multiple/not-found/incomplete results, subtree diff isolation and direct use of returned identities by actions and waits. Installed Win10 acceptance covered a 2234-node fixture and the real AutoCAD Options tab/Cancel workflow. See the [search contract](docs/features/observation-input.md#control-search-and-subtree-observation) and [acceptance record](docs/control-search-acceptance-20261010.md).
 - [x] Checkpoint trees and stable IDs, keep/delete/subtree operations, `save_current` and temporary-checkpoint cleanup.
 - [x] Duplicate-name ambiguity for checkpoint restore, keep and delete; this was already verified in the 2026-10-10 acceptance.
 - [x] Desktop application discovery and `vm_doctor` diagnostics.

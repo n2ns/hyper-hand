@@ -32,7 +32,7 @@ type deps struct {
 	m       *Manager
 	raw     Backend     // the backend without input serialisation
 	backend lockedInput // the backend with every input call under input
-	input   *sync.Mutex // held around every tool that sends keyboard or mouse input (see features.md 4.5)
+	input   *sync.Mutex // held around every tool that sends keyboard or mouse input (see docs/features/observation-input.md 4.5)
 	call    agentCall   // one agent op on a VM by name
 	u       unlocker
 	obs     *observationStore
