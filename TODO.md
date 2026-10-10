@@ -1,8 +1,31 @@
 # HyperHand TODO
 
-Updated: 2026-10-10.
+Updated: 2026-10-11.
 
 This document tracks remaining delivery work, unimplemented capabilities and acceptance gaps. An unchecked acceptance item is not a confirmed defect. Priorities reflect the current workflow: AI-driven Windows VM automation and AutoCAD testing.
+
+## 0. Execution plan (autonomous phases)
+
+A checklist an AI can run phase after phase without the user. Not started. Work the phases in order; each one ends with a commit and push, so an interrupted run resumes at the first unchecked phase.
+
+Every phase follows the same steps:
+
+1. Implement, with focused tests; `go vet ./cmd/... ./internal/...` and `go test -race ./cmd/... ./internal/...` pass.
+2. Install on the host with `go run ./cmd/hyperhand dev-install` (no UAC), then `vm_update_agent` on `Win10`.
+3. Accept on `Win10` only (`Win10-Example` belongs to Example testing); keep evidence under ignored `build/<phase>-<date>/` and write an acceptance record in `docs/` when the phase adds or proves behavior.
+4. Update the affected chapter in `docs/features/`, `docs/user-guide.md` if usage changes, `CHANGELOG.md` [Unreleased] and this TODO (check the phase, move finished items to section 6).
+5. Review by risk as the global rules say (correctness and stated requirements only; a re-review checks only the fixes), then commit and push.
+
+Stop conditions: a step that needs a user decision, a UAC prompt or work on the host desktop, or a failure that cannot be reproduced, is recorded under the phase as "Blocked: ..." and the run continues with the next phase. Never push a release tag.
+
+- [ ] **A. Housekeeping.** Correct stale statuses in this TODO (for example, `Win10-Example` agents have been updated). Keep the historical Go experiments under ignored `build/` out of package discovery so that `go test -race ./...` passes cleanly (section 4); preserve those artifacts.
+- [ ] **B. Sequential batches with assertions** (section 2, P2). One tool call runs ordered tool steps with per-step results and optional assertions, stops at the first failure or failed assertion, reports the last completed step and never repeats a side-effecting step automatically. Contract, tests, Win10 acceptance with a real multi-step UI flow.
+- [ ] **C. Automatable acceptance gaps** (sections 1 and 3), on `Win10` only: mirror expired plans, old-agent upgrade errors, cancellation and mid-transfer disconnects with staging cleanup; guest uninstall and reinstall (independent recovery path); blocked graceful shutdown with an unsaved disposable document; long checkpoint merges at the timeout boundary; Production-only checkpoints; hung UI threads. Fix what fails (reproduce first).
+- [ ] **D. VM save and pause controls** (section 2, P2). Explicit Save and Pause operations and the resume readiness of the agent and desktop; Win10 acceptance of save, pause and resume.
+- [ ] **E. Acceptance evidence export** (section 2, P2). Package versions, environment, steps, assertions, screenshots and file hashes into one reviewable artifact without credentials or unrelated data; produce one for a real Win10 run.
+- [ ] **F. Release preparation** (section 4). Migration notes in `CHANGELOG.md` for removed tools/parameters and guest upgrades; build the release package locally and verify packaged and installed versions and hashes. Stop before tagging: publishing is the user's decision.
+
+Not in this plan (need the user or the host desktop): the product decisions in section 5; the host tray Restart menu, host self-uninstall (UAC) and interactive host UAC (section 3); display configurations that change VM settings; VMConnect viewer reconnection (host window); publishing the release.
 
 ## 1. Directory mirror delivery
 
