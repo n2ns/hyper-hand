@@ -3,6 +3,7 @@
 //	hyperhand.exe [-port 8770]   run the tray and MCP server as the current user
 //	hyperhand.exe install        install the dedicated Hyper-V service and user logon task
 //	hyperhand.exe uninstall      remove the host service and user logon task
+//	hyperhand.exe dev-install    development: build this checkout and install it through the preauthorized task (no UAC)
 package main
 
 import (
@@ -36,6 +37,10 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+	// A console command for development: progress on stdout, errors on stderr, no tray or message boxes.
+	if len(os.Args) > 1 && os.Args[1] == "dev-install" {
+		os.Exit(devInstallCommand(os.Args[2:]))
 	}
 	// Before the log file is opened, so uninstall can delete its folder.
 	if len(os.Args) > 1 && os.Args[1] == "uninstall" {

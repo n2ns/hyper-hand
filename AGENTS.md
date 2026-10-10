@@ -22,12 +22,12 @@ go build -ldflags "-H windowsgui" -o build\hyperhand.exe .\cmd\hyperhand
 go build -ldflags "-H windowsgui" -o build\hyperhand-agent.exe .\cmd\hyperhand-agent
 go vet ./cmd/... ./internal/...
 go test -race ./cmd/... ./internal/...
-scripts\dev-install.ps1    # builds this checkout and installs it on the host WITHOUT UAC, then checks the result
+go run ./cmd/hyperhand dev-install    # builds this checkout and installs it on the host WITHOUT UAC, then checks the result
 ```
 
 - Test `./cmd/...` and `./internal/...`, not `./...`: the ignored `build\` directory holds old Go experiments that no longer compile.
-- The running service and tray use the installed copies under `%ProgramFiles%\HyperHand`; the files in `build\` are not the running version. Install a build only with `scripts\dev-install.ps1` (powershell -NoProfile -ExecutionPolicy Bypass -File ...): it goes through the preauthorized task `HyperHand Dev Install` and never prompts for UAC. Then update each guest agent with `vm_update_agent`.
-- Never run `hyperhand.exe install` without `--quiet` during development: it prompts for UAC. If `dev-install.ps1` reports that the task is not registered, ask the user to run `scripts\dev-install-setup.ps1` once from an elevated PowerShell; do not fall back to a UAC install.
+- The running service and tray use the installed copies under `%ProgramFiles%\HyperHand`; the files in `build\` are not the running version. Install a build only with `go run ./cmd/hyperhand dev-install` from the repository root (`--no-build` installs the files already in `build\dev-install`; exit code 0 means installed and checked): it goes through the preauthorized task `HyperHand Dev Install` and never prompts for UAC. Then update each guest agent with `vm_update_agent`.
+- Never run `hyperhand.exe install` without `--quiet` during development: it prompts for UAC. If `dev-install` reports that the task is not registered, ask the user to run `scripts\dev-install-setup.ps1` once from an elevated PowerShell; do not fall back to a UAC install.
 - Never kill processes by name (`taskkill /IM`, `Stop-Process -Name`); the installer owns service and tray replacement.
 - Do not add PowerShell or batch to the installer (`cmd/hyperhand/setup_*.go`).
 - When a change to `internal/proto` alters what the host and agent exchange, increment `proto.Protocol`; the host refuses older agents with `agent_outdated` and there is no compatibility path.

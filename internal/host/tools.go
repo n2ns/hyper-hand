@@ -24,6 +24,7 @@ type vmIn struct {
 //	tools_checkpoint.go vm_checkpoint_delete, vm_checkpoint_keep (registered from registerVM)
 //	tools_launch.go   vm_launch
 //	tools_apps.go     vm_apps
+//	tools_fileinfo.go vm_file_info
 //	tools_turn.go     vm_end_turn
 //	tools_doctor.go   vm_doctor
 type deps struct {
@@ -130,6 +131,7 @@ func NewServer(m *Manager) *mcp.Server {
 	registerActions(d)
 	registerLaunch(d)
 	registerApps(d)
+	registerFileInfo(d)
 	registerTurn(d)
 	registerJobs(d)
 	registerDoctor(d)

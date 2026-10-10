@@ -99,6 +99,7 @@ Every tool except `vm_list` requires `vm` (the VM name from `vm_list`); there is
 | `vm_exec` | Run a command to completion in the guest; `shell`, `cwd`, `timeout_ms`, `admin`; `background: true` starts it as a job and returns its `id` at once |
 | `vm_job` | Read a background job's state and output incrementally (`stdout_offset`/`stderr_offset`, `wait_ms`), cancel its process tree, or list the agent's jobs; jobs survive reconnects and host restarts |
 | `vm_push`, `vm_pull` | Copy files or directories host to guest and back; `vm_push` skips unchanged files unless `force` is true. `mode: mirror` synchronizes exact directory contents with `phase: plan` then `phase: apply` and the returned `plan_id` |
+| `vm_file_info` | Check up to 64 guest paths in one call (environment variables such as `%APPDATA%` expanded): existence, file or directory, size, SHA-256, PE `ProductVersion` and modification time; read-only |
 | `vm_clipboard_get`, `vm_clipboard_set` | Read or write the guest clipboard |
 | `vm_wait` | Wait for a process, file or UI condition; check or assert window/control state |
 | `vm_end_turn` | End this task's work: cancel its waits, clean up its temporary checkpoints and release its VM ownership; `vm` limits cleanup to one VM |

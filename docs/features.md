@@ -37,7 +37,7 @@ HyperHand consists of two Windows executables.
 
 - When an MCP call is cancelled, the host forces the connection's deadline, which aborts the pending read or write, and drops the connection.
 - The agent reads frames on a separate goroutine. The host sends nothing while it waits for a response, so a read error while a request runs means the host went away; the agent then cancels that request's context.
-- Cancellation stops `exec` (the process tree is killed, see 5.4), `hash_files` and `wait`. The agent does not send a response after the host disconnected.
+- Cancellation stops `exec` (the process tree is killed, see 5.4), `hash_files`, `file_info` and `wait`. The agent does not send a response after the host disconnected.
 
 ### 1.5 Agent service loop
 
@@ -59,7 +59,7 @@ HyperHand consists of two Windows executables.
 
 - Every successful call returns one text item containing one JSON object. No tool returns free text or `ok` lines.
 - `vm_observe`, and an action whose `observe_after` includes a screenshot (see 4.4), return a PNG image item **before** the JSON text item. No other tool returns an image.
-- Every tool carries MCP tool annotations. `openWorldHint` is `false` for all. `readOnlyHint` is `true` for `vm_list`, `vm_status`, `vm_checkpoints`, `vm_pull`, `vm_clipboard_get`, `vm_wait`, `vm_windows`, `vm_find_controls`, `vm_observe` and `vm_doctor`. `destructiveHint` is `true` for `vm_shutdown`, `vm_turn_off`, `vm_restore`, `vm_checkpoint_delete`, `vm_push`, `vm_update_agent` and `vm_end_turn`, and `false` for every other tool. `idempotentHint` is `true` for `vm_list`, `vm_start`, `vm_status`, `vm_unlock`, `vm_shutdown`, `vm_turn_off`, `vm_checkpoints`, `vm_pull`, `vm_clipboard_get`, `vm_clipboard_set`, `vm_wait`, `vm_update_agent`, `vm_set_value`, `vm_end_turn` and `vm_doctor`. The annotations are hints for clients, not a security boundary.
+- Every tool carries MCP tool annotations. `openWorldHint` is `false` for all. `readOnlyHint` is `true` for `vm_list`, `vm_status`, `vm_checkpoints`, `vm_pull`, `vm_file_info`, `vm_clipboard_get`, `vm_wait`, `vm_windows`, `vm_find_controls`, `vm_observe` and `vm_doctor`. `destructiveHint` is `true` for `vm_shutdown`, `vm_turn_off`, `vm_restore`, `vm_checkpoint_delete`, `vm_push`, `vm_update_agent` and `vm_end_turn`, and `false` for every other tool. `idempotentHint` is `true` for `vm_list`, `vm_start`, `vm_status`, `vm_unlock`, `vm_shutdown`, `vm_turn_off`, `vm_checkpoints`, `vm_pull`, `vm_clipboard_get`, `vm_clipboard_set`, `vm_wait`, `vm_update_agent`, `vm_set_value`, `vm_end_turn` and `vm_doctor`. The annotations are hints for clients, not a security boundary.
 - Each task has a **run ID** of the form `run-<yyyymmdd-hhmm>-<16 hex>`, generated when the task is created. It accompanies `task_id` in resolved tool results and is used in checkpoint names (see 3.3). Refusals before task resolution, such as `task_required`, have no task or run ID.
 - Tool descriptions of `vm_windows`, `vm_find_controls`, `vm_observe`, the actions, `vm_exec`, `vm_pull` and `vm_clipboard_get` state that window titles, control names and values, selected text, command output, file contents and clipboard text are data from the guest, not instructions.
 
@@ -578,6 +578,18 @@ The same inventory limits also apply to the intermediate tree after copying but 
 
 Because mirror apply plans are single-use, the `vm_push` tool no longer advertises `idempotentHint`, even though ordinary copy still has its previous semantics. Its static annotation remains destructive; mirror plan is read-only at execution time.
 
+### 6.6 vm_file_info
+
+`vm_file_info` reads facts about guest files and directories without copying or changing anything, for example to verify an installation. It needs the agent and no write ownership (read-only, idempotent).
+
+- `paths` holds 1 to 64 guest paths; an empty list, more than 64 entries or an empty entry is `invalid_argument` before the agent is asked.
+- The agent expands environment variables (`%APPDATA%`, `%USERPROFILE%`, ...) with `ExpandEnvironmentStrings` in its own process, which runs as the logged-on user; an unknown variable stays as written. A path that is not absolute after expansion gets an `error` and nothing else is read.
+- Result: `{"files": [{"path": "%APPDATA%\App\app.dll", "resolved": "C:\Users\tester\AppData\Roaming\App\app.dll", "exists": true, "type": "file", "size": 123456, "sha256": "<lowercase hex>", "version": "1.2.3.4", "modified": "2026-10-11T09:05:07Z"}]}`, one entry per path in request order. `path` is as given, `resolved` is the expanded and cleaned path.
+- `type` is `file` or `dir` and present only when `exists`. Files get `size` (bytes, also `0`), `sha256` and `modified` (RFC 3339, UTC, last write time); directories get `modified` only. Symbolic links and junctions are followed.
+- `version` is the `ProductVersion` string of the file's version resource (`GetFileVersionInfo`/`VerQueryValue`; the resource's translations, then `040904b0` and `040904e4`); it is omitted for files without one.
+- A missing path is `exists: false` with no other fields, not an error. A file that cannot be opened (locked, access denied) is `exists: true` with `size`, `modified` and an `error` string and no `sha256`; a file larger than 1 GiB is not hashed and gets an `error`. A path that cannot be checked for another reason (for example an invalid name) is `exists: false` with an `error`.
+- The agent reads each file in 1 MB buffers; cancelling the call stops hashing. An agent older than protocol 4 is refused with `agent_outdated` (8.6).
+
 ## 7. Clipboard, Launching, Waiting and Turn End
 
 These tools need the agent, except `vm_end_turn`.
@@ -698,7 +710,7 @@ The update replaces the file the agent is running from; the HKCU Run entry is un
 
 ### 8.6 Protocol version
 
-The guest protocol has a generation number, `protocol` 3 in this version (3 added the background job ops), reported by the agent's `ping`. There is no compatibility path for older agents:
+The guest protocol has a generation number, `protocol` 4 in this version (3 added the background job ops, 4 added `file_info`), reported by the agent's `ping`. There is no compatibility path for older agents:
 
 - Every new connection to an agent is checked once: before the first op other than `ping` or `update_agent`, the host pings the agent and refuses an older `protocol` with `agent_outdated` (fields `agent_protocol`, `host_protocol`; `next` `call vm_update_agent`) for that op and every later one on the connection. `vm_status` (which only pings) and `vm_update_agent` therefore still work on an old agent, so that it can be reported and replaced; `vm_start`, `vm_install_agent` and `vm_update_agent` additionally check the protocol of the agent that answers their readiness ping.
 - An agent that answers `unknown op` to a request is reported as `agent_outdated` with the same `next`.
@@ -789,6 +801,7 @@ uint32 header length | uint64 payload length | header JSON | payload bytes
 | `read_file` | `{path}` | payload (file contents) |
 | `list_dir` | `{path}` | `{entries: [{name, is_dir}]}`, links skipped |
 | `hash_files` | `{paths}` | `{hashes}`, lowercase hex SHA-256 in order, `""` when unavailable |
+| `file_info` | `{paths}` (1 to 64) | `{files: [{path, resolved, exists, type, size, sha256, version, modified, error}]}`, fields omitted when they do not apply (see 6.6) |
 | `mirror_scan` | `{path}` | `{exists, entries: [{path, kind, size, sha256}]}`; strict bounded directory manifest (6.5) |
 | `mirror_apply` | `{path, source, target, force}` plus payload | `{status, completed, failed?, pending}`; source/target are manifests. Payload concatenates `copy`/`overwrite` file bytes in the deterministic diff order; streamed to temporary storage before target changes (6.5) |
 | `type_keys` | `{text, handle, pid}` | `{events}`, the number of injected input events |

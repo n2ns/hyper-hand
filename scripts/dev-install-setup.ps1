@@ -1,6 +1,7 @@
-# One-time registration (or removal) of the on-demand task "HyperHand Dev Install", which lets scripts\dev-install.ps1
-# install development builds of this checkout without a UAC prompt. Run once from an elevated PowerShell opened as the
-# developer who will run dev-install.ps1 (that is the one UAC approval):
+# One-time registration (or removal) of the on-demand task "HyperHand Dev Install", which lets
+# `go run ./cmd/hyperhand dev-install` (run from the repository root) install development builds of this checkout
+# without a UAC prompt. Run once from an elevated PowerShell opened as the developer who will run dev-install (that is
+# the one UAC approval):
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-install-setup.ps1 [-Mode Enable|Remove]
 #
@@ -41,7 +42,7 @@ if ($Mode -eq 'Remove') {
 if ($null -ne $task) { Write-Output "'$taskName' is already registered for this checkout and user"; exit 0 }
 
 $d = $scheduler.NewTask(0)
-$d.RegistrationInfo.Description = "HyperHand development install for $candidate (scripts\dev-install.ps1). Runs that file elevated on demand."
+$d.RegistrationInfo.Description = "HyperHand development install for $candidate (go run ./cmd/hyperhand dev-install). Runs that file elevated on demand."
 $d.Principal.UserId = $owner
 $d.Principal.LogonType = 3          # interactive token: the developer must be signed in
 $d.Principal.RunLevel = 1           # highest available
@@ -64,4 +65,4 @@ if ($r.Principal.RunLevel -ne 1 -or $r.Triggers.Count -ne 0 -or $r.Actions.Item(
     Write-Error 'The registered task differs from what was requested; inspect it in Task Scheduler.' -ErrorAction Continue
     exit 1
 }
-Write-Output "registered '$taskName'; install builds with scripts\dev-install.ps1 (no UAC)"
+Write-Output "registered '$taskName'; install builds with go run ./cmd/hyperhand dev-install from the repository root (no UAC)"
