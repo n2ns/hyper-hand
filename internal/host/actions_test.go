@@ -476,7 +476,7 @@ func TestSetValue(t *testing.T) {
 	if r.IsError || m["ok"] != true || m["verified"] != true || m["value"] != "abc" || m["window"].(map[string]any)["handle"] != float64(10) {
 		t.Fatalf("result %v", m)
 	}
-	if a := f.args[slices.Index(f.ops, proto.OpControlAction)].(proto.ControlActionArgs); a != (proto.ControlActionArgs{Handle: 10, PID: 100, RuntimeID: "42.7", Action: "SetValue", Value: "abc"}) {
+	if a := f.args[slices.Index(f.ops, proto.OpControlAction)].(proto.ControlActionArgs); !reflect.DeepEqual(a, proto.ControlActionArgs{Handle: 10, PID: 100, RuntimeID: "42.7", Action: "SetValue", Value: "abc", HintRect: &controlNodes()[1].Rect}) {
 		t.Errorf("control_action args %+v", a)
 	}
 	// observe_after controls: the tree of the observed window, no image.
@@ -801,7 +801,7 @@ func TestScreenObservationWithControls(t *testing.T) {
 	if r.IsError || td.b.events() != "click 350,220 b1 c1 []" || m["window"].(map[string]any)["handle"] != float64(10) {
 		t.Errorf("index click: %v %q", m, td.b.events())
 	}
-	if i := slices.Index(f.ops, proto.OpControlAction); i < 0 || f.args[i].(proto.ControlActionArgs) != (proto.ControlActionArgs{Handle: 10, PID: 100, RuntimeID: "42.7", Action: "Locate"}) {
+	if i := slices.Index(f.ops, proto.OpControlAction); i < 0 || !reflect.DeepEqual(f.args[i].(proto.ControlActionArgs), proto.ControlActionArgs{Handle: 10, PID: 100, RuntimeID: "42.7", Action: "Locate", HintRect: &controlNodes()[1].Rect}) {
 		t.Errorf("locate args: %v", f.args)
 	}
 	// A control that vanished since the observation is stale_element, nothing is clicked.

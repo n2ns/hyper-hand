@@ -50,6 +50,13 @@ func listControls(ctx context.Context, args json.RawMessage, _ []byte) (any, []b
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, nil, err
 	}
+	if a.RootRuntimeID != "" {
+		return nil, nil, errors.New("scoped controls require list_control_subtree")
+	}
+	return listControlsArgs(ctx, a)
+}
+
+func listControlsArgs(ctx context.Context, a proto.ControlsArgs) (any, []byte, error) {
 	a, err := controlsArgs(a)
 	if err != nil {
 		return nil, nil, err
@@ -124,12 +131,14 @@ func helperCommand(ctx context.Context) (*exec.Cmd, error) {
 // helperRequest is what the agent sends to the UIA helper on stdin; exactly one field is set.
 type helperRequest struct {
 	Controls *proto.ControlsArgs      `json:"controls,omitempty"`
+	Find     *proto.FindControlsArgs  `json:"find,omitempty"`
 	Action   *proto.ControlActionArgs `json:"action,omitempty"`
 	Focused  bool                     `json:"focused,omitempty"`
 }
 
 type helperReply struct {
 	Controls *proto.ControlsResult      `json:"controls,omitempty"`
+	Find     *proto.FindControlsResult  `json:"find,omitempty"`
 	Action   *proto.ControlActionResult `json:"action,omitempty"`
 	Focused  *proto.FocusedControl      `json:"focused,omitempty"`
 	Error    string                     `json:"error,omitempty"`
@@ -199,6 +208,14 @@ func RunControlsHelper(args []string) (bool, error) {
 	var reply helperReply
 	var err error
 	switch {
+	case req.Find != nil:
+		var a proto.FindControlsArgs
+		a, err = findControlsArgs(*req.Find)
+		if err == nil {
+			var r proto.FindControlsResult
+			r, err = collectFindControls(a)
+			reply.Find = &r
+		}
 	case req.Controls != nil:
 		var a proto.ControlsArgs
 		a, err = controlsArgs(*req.Controls)

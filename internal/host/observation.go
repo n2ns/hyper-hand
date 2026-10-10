@@ -13,15 +13,17 @@ import (
 
 // observeIn is vm_observe's input, also used by actions for their after-action observation (observe_after).
 type observeIn struct {
-	VM         string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
-	Handle     uint64 `json:"handle,omitempty" jsonschema:"observe this window (handle from vm_windows or a previous observation): the screenshot is cropped to it and the control tree rooted at it; omit for the whole screen"`
-	PID        uint32 `json:"pid,omitempty" jsonschema:"restrict handle to this process, or select the process's only visible window"`
-	Screenshot *bool  `json:"screenshot,omitempty" jsonschema:"include a screenshot; default true"`
-	Controls   bool   `json:"controls,omitempty" jsonschema:"include the UI Automation control tree as indexed text; default false"`
-	MaxDepth   int    `json:"max_depth,omitempty" jsonschema:"control tree depth; default 4, maximum 10"`
-	MaxNodes   int    `json:"max_nodes,omitempty" jsonschema:"control tree size; default 200, maximum 1000"`
-	MaxSize    int    `json:"max_size,omitempty" jsonschema:"longest side of the output image in pixels; 0 keeps the original size, never upscales"`
-	DiffFrom   string `json:"diff_from,omitempty" jsonschema:"a previous observation_id of the same window: controls then lists only added, removed and changed nodes"`
+	VM            string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	Handle        uint64 `json:"handle,omitempty" jsonschema:"observe this window (handle from vm_windows or a previous observation): the screenshot is cropped to it and the control tree rooted at it; omit for the whole screen"`
+	PID           uint32 `json:"pid,omitempty" jsonschema:"restrict handle to this process, or select the process's only visible window"`
+	ObservationID string `json:"observation_id,omitempty" jsonschema:"with index, observe this control's subtree; alternative to handle/pid; implies controls; screenshot remains cropped to its window"`
+	Index         *int   `json:"index,omitempty" jsonschema:"subtree root index from vm_find_controls or vm_observe; requires observation_id"`
+	Screenshot    *bool  `json:"screenshot,omitempty" jsonschema:"include a screenshot; default true"`
+	Controls      bool   `json:"controls,omitempty" jsonschema:"include the UI Automation control tree as indexed text; default false"`
+	MaxDepth      int    `json:"max_depth,omitempty" jsonschema:"control tree depth; default 4, maximum 10"`
+	MaxNodes      int    `json:"max_nodes,omitempty" jsonschema:"control tree size; default 200, maximum 1000"`
+	MaxSize       int    `json:"max_size,omitempty" jsonschema:"longest side of the output image in pixels; 0 keeps the original size, never upscales"`
+	DiffFrom      string `json:"diff_from,omitempty" jsonschema:"a previous observation_id of the same window: controls then lists only added, removed and changed nodes"`
 }
 
 // observeScreenshot describes the returned image: (OriginX, OriginY) is its top-left in guest screen pixels and Scale
@@ -108,6 +110,8 @@ type observation struct {
 	HasImage               bool
 	Nodes                  []proto.ControlInfo // the control tree, nil when not captured
 	TreeWindow             *proto.WindowInfo   // the window Nodes belong to: Window, or the foreground window of a whole-screen observation
+	TreeRootRuntimeID      string              // empty for a whole-window tree
+	SearchResults          bool                // a result set is not a tree suitable for tree diffs
 }
 
 // treeWindow returns the window the control tree belongs to, nil when there is none.

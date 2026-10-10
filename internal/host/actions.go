@@ -515,7 +515,7 @@ func (a *action) controlAction(o *observation, w proto.WindowInfo, node proto.Co
 	if pid == 0 {
 		pid = w.PID
 	}
-	_, err := a.d.call(ctx, a.vm, proto.OpControlAction, proto.ControlActionArgs{Handle: w.Handle, PID: pid, RuntimeID: node.RuntimeID, Action: action, Value: value}, nil, &r)
+	_, err := a.d.call(ctx, a.vm, proto.OpControlAction, proto.ControlActionArgs{Handle: w.Handle, PID: pid, RuntimeID: node.RuntimeID, Action: action, Value: value, HintRect: &node.Rect}, nil, &r)
 	if err == nil {
 		return r, nil
 	}

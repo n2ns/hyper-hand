@@ -2,14 +2,44 @@ package proto
 
 const OpListControls = "list_controls"
 
+// Separate ops make scoped reads fail closed on agents that only support whole-window snapshots.
+const OpListControlSubtree = "list_control_subtree"
+const OpFindControls = "find_controls"
+
 // OpControlAction performs a UI Automation pattern action on one element: ControlActionArgs -> ControlActionResult.
 const OpControlAction = "control_action"
 
 type ControlsArgs struct {
-	Handle   uint64 `json:"handle"`
-	PID      uint32 `json:"pid"`
-	MaxDepth int    `json:"max_depth,omitempty"`
-	MaxNodes int    `json:"max_nodes,omitempty"`
+	Handle        uint64 `json:"handle"`
+	PID           uint32 `json:"pid"`
+	MaxDepth      int    `json:"max_depth,omitempty"`
+	MaxNodes      int    `json:"max_nodes,omitempty"`
+	RootRuntimeID string `json:"root_runtime_id,omitempty"`
+	HintRect      *Rect  `json:"hint_rect,omitempty"` // optional old screen bounds; identity must still match
+}
+
+// FindControlsArgs searches the control view with exact, AND-combined selectors.
+// RootRuntimeID scopes the search to an existing element; empty means the window.
+type FindControlsArgs struct {
+	Handle        uint64 `json:"handle"`
+	PID           uint32 `json:"pid"`
+	RootRuntimeID string `json:"root_runtime_id,omitempty"`
+	HintRect      *Rect  `json:"hint_rect,omitempty"` // hint for RootRuntimeID, never a selector
+	AutomationID  string `json:"automation_id,omitempty"`
+	Name          string `json:"name,omitempty"`
+	ControlType   int32  `json:"control_type,omitempty"`
+	MaxDepth      int    `json:"max_depth,omitempty"`
+	MaxVisited    int    `json:"max_visited,omitempty"`
+	MaxMatches    int    `json:"max_matches,omitempty"`
+}
+
+// Matches form a flat list: indexes are local, Parent is -1, and Depth is relative
+// to the search root. Truncated means uniqueness and absence are not established.
+type FindControlsResult struct {
+	Matches    []ControlInfo `json:"matches"`
+	Visited    int           `json:"visited"`
+	Truncated  bool          `json:"truncated"`
+	Truncation []string      `json:"truncation,omitempty"`
 }
 
 // ControlInfo is one node of the control-view tree. Rect uses physical screen pixels. Index is local to this snapshot;
@@ -79,6 +109,7 @@ type ControlActionArgs struct {
 	RuntimeID string `json:"runtime_id"`
 	Action    string `json:"action"`
 	Value     string `json:"value,omitempty"`
+	HintRect  *Rect  `json:"hint_rect,omitempty"` // hint only; RuntimeID remains authoritative
 }
 
 // ControlActionResult: after the action, Rect is the element's current bounding rectangle (physical screen pixels)

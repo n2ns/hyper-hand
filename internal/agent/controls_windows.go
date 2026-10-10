@@ -193,11 +193,26 @@ func collectControls(a proto.ControlsArgs) (proto.ControlsResult, error) {
 	if err != nil {
 		return proto.ControlsResult{}, err
 	}
+	if a.RootRuntimeID != "" {
+		if hinted, ok := s.findHintedRuntimeID(e, a, a.RootRuntimeID, a.HintRect); ok {
+			e = hinted
+		} else {
+			e, err = e.findScopedRuntimeID(a.RootRuntimeID)
+		}
+		if err != nil {
+			return proto.ControlsResult{}, err
+		}
+		defer e.release()
+	}
 	r, err := walkControls(e, a)
 	if err != nil {
 		return proto.ControlsResult{}, err
 	}
-	r.SelectedText = selectedText(s, e, a.PID)
+	if a.RootRuntimeID == "" {
+		r.SelectedText = selectedText(s, e, a.PID)
+	} else if password, err := e.integer(uiaPassword); err == nil && password == 0 {
+		r.SelectedText, _ = e.selection()
+	}
 	if err := validateControlsWindow(a); err != nil {
 		return proto.ControlsResult{}, err
 	}
@@ -319,7 +334,10 @@ func performControlAction(a proto.ControlActionArgs) (proto.ControlActionResult,
 	if err != nil {
 		return proto.ControlActionResult{}, err
 	}
-	e, err := root.findRuntimeID(a.RuntimeID)
+	e, hinted := s.findHintedRuntimeID(root, ca, a.RuntimeID, a.HintRect)
+	if !hinted {
+		e, err = root.findRuntimeID(a.RuntimeID)
+	}
 	if err != nil {
 		return proto.ControlActionResult{}, err
 	}
@@ -424,7 +442,9 @@ func readControlActionResult(e *nativeControl, available []bool, action, request
 // valuePatternIndex is the uiaPatterns entry of ValuePattern.
 var valuePatternIndex = patternFor("SetValue")
 
-type nativeControl struct{ element, walker *ole.IUnknown }
+type nativeControl struct {
+	element, walker *ole.IUnknown
+}
 
 func (e *nativeControl) release() { e.element.Release() }
 func (e *nativeControl) relative(slot int) (controlElement, error) {

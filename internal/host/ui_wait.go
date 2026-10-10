@@ -100,7 +100,9 @@ type uiWaitTarget struct {
 	selector windowSelector
 	window   *proto.WindowInfo
 	runtime  string
+	hint     *proto.Rect
 	epoch    uint64
+	direct   bool
 }
 
 func (d *deps) waitUI(ctx context.Context, in waitIn) (*mcp.CallToolResult, error) {
@@ -140,6 +142,8 @@ func (d *deps) waitUI(ctx context.Context, in waitIn) (*mcp.CallToolResult, erro
 		}
 		w := *o.treeWindow()
 		target.window, target.runtime = &w, node.RuntimeID
+		target.hint = &node.Rect
+		target.direct = o.SearchResults || o.TreeRootRuntimeID != ""
 		target.selector = windowSelector{Handle: w.Handle, PID: w.PID}
 	}
 	start := time.Now()
@@ -278,7 +282,27 @@ func (d *deps) sampleUIWait(ctx context.Context, in waitIn, target *uiWaitTarget
 		return ws.Foreground == w.Handle || w.Foreground, last, nil
 	}
 	var tree proto.ControlsResult
-	if err := d.uiWaitCall(ctx, in.VM, proto.OpListControls, proto.ControlsArgs{Handle: w.Handle, PID: w.PID, MaxDepth: in.MaxDepth, MaxNodes: in.MaxNodes}, &tree); err != nil {
+	op := proto.OpListControls
+	args := proto.ControlsArgs{Handle: w.Handle, PID: w.PID, MaxDepth: in.MaxDepth, MaxNodes: in.MaxNodes}
+	if target.direct {
+		op, args.RootRuntimeID = proto.OpListControlSubtree, target.runtime
+		args.HintRect = target.hint
+		args.MaxDepth, args.MaxNodes = 1, 1
+	}
+	if err := d.uiWaitCall(ctx, in.VM, op, args, &tree); err != nil {
+		if target.direct && strings.HasPrefix(asToolError(err).Reason, "element not found") {
+			// Only a complete runtime-ID miss establishes disappearance. Recheck
+			// the session and lifecycle before interpreting it as absence.
+			after, checkErr := readWindows()
+			if checkErr != nil {
+				return false, last, checkErr
+			}
+			if current, ok := findWindow(after.Windows, w.Handle); ok && !sameWindowIdentity(current, w) {
+				return false, last, stale()
+			}
+			last["control_exists"] = false
+			return in.Kind == "control_gone", last, nil
+		}
 		last["unknown"] = "control tree read failed"
 		return false, last, err
 	}

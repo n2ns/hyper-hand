@@ -66,6 +66,9 @@ func observedWindow(w proto.WindowInfo) *observeWindow {
 // the whole screen, takes the host console screenshot cropped to the window, reads the control tree when asked, stores
 // the observation and returns its JSON item and PNG.
 func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte, error) {
+	if err := validateControlScope(in.Handle, in.PID, in.ObservationID, in.Index); err != nil {
+		return nil, nil, err
+	}
 	if in.MaxDepth < 0 || in.MaxDepth > limitMaxDepth || in.MaxNodes < 0 || in.MaxNodes > limitMaxNodes {
 		return nil, nil, refuse(codeInvalidArgument, fmt.Sprintf("pass max_depth 0..%d and max_nodes 0..%d (0 uses the defaults %d and %d)", limitMaxDepth, limitMaxNodes, defaultMaxDepth, defaultMaxNodes), nil, "max_depth %d, max_nodes %d out of range", in.MaxDepth, in.MaxNodes)
 	}
@@ -79,8 +82,8 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 		in.MaxNodes = defaultMaxNodes
 	}
 	wantImage := in.Screenshot == nil || *in.Screenshot
-	wantControls := in.Controls || in.DiffFrom != ""
-	windowed := in.Handle != 0 || in.PID != 0
+	wantControls := in.Controls || in.DiffFrom != "" || in.ObservationID != ""
+	windowed := in.Handle != 0 || in.PID != 0 || in.ObservationID != ""
 
 	v, err := d.raw.Find(in.VM)
 	if err != nil {
@@ -94,8 +97,21 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 	defer d.input.Unlock()
 	store := d.taskObs(ctx)
 	version := store.version(vm)
+	var scopeWindow *proto.WindowInfo
+	rootRuntimeID := ""
+	var hint *proto.Rect
+	if in.ObservationID != "" {
+		var node *proto.ControlInfo
+		scopeWindow, node, err = d.loadControlScope(ctx, vm, in.ObservationID, *in.Index)
+		if err != nil {
+			return nil, nil, err
+		}
+		rootRuntimeID, hint = node.RuntimeID, &node.Rect
+		in.Handle, in.PID = scopeWindow.Handle, scopeWindow.PID
+	}
 	out := &observeOut{VM: vm, CapturedAt: time.Now().UTC().Format(time.RFC3339)}
 	obs := &observation{VM: vm, Scale: 1, Revision: version.Revision, Epoch: version.Epoch}
+	obs.TreeRootRuntimeID = rootRuntimeID
 	var risks []string
 	if version.Busy != 0 {
 		risks = append(risks, "mutating operation in progress: wait for it to finish, then observe again before acting")
@@ -114,6 +130,15 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 		out.Agent = "offline"
 	}
 	obs.Windows = wr.Windows
+	if rootRuntimeID != "" {
+		if err := (&action{ws: &wr}).checkSession(true); err != nil {
+			return nil, nil, err
+		}
+		current, found := findWindow(wr.Windows, scopeWindow.Handle)
+		if !found || !sameWindowIdentity(current, *scopeWindow) {
+			return nil, nil, refuse(codeStaleObservation, "find or observe the control again", nil, "subtree window identity changed")
+		}
+	}
 
 	// The window whose rect crops the screenshot (windowed) and whose control tree is read (windowed, or the
 	// foreground window for a whole-screen observation with controls).
@@ -176,8 +201,19 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 	var cr proto.ControlsResult
 	captured := false
 	if wantControls && target != nil {
-		args := proto.ControlsArgs{Handle: target.Handle, PID: target.PID, MaxDepth: in.MaxDepth, MaxNodes: in.MaxNodes}
-		if _, err := d.call(ctx, vm, proto.OpListControls, args, nil, &cr); err != nil {
+		args := proto.ControlsArgs{Handle: target.Handle, PID: target.PID, MaxDepth: in.MaxDepth, MaxNodes: in.MaxNodes, RootRuntimeID: rootRuntimeID, HintRect: hint}
+		op := proto.OpListControls
+		readCtx := ctx
+		if rootRuntimeID != "" {
+			op = proto.OpListControlSubtree
+			var cancel context.CancelFunc
+			readCtx, cancel = context.WithTimeout(ctx, uiWaitCallTimeout)
+			defer cancel()
+		}
+		if _, err := d.call(readCtx, vm, op, args, nil, &cr); err != nil {
+			if rootRuntimeID != "" {
+				return nil, nil, controlReadError(err)
+			}
 			switch {
 			case agentUnreachable(err) && windowed:
 				return nil, nil, agentRequired(err)
@@ -203,7 +239,7 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 	if captured && cr.Focused >= 0 && cr.Focused < len(cr.Nodes) {
 		n := cr.Nodes[cr.Focused]
 		out.Focused = &observeFocused{Index: n.Index, Name: n.Name, ControlType: proto.ControlTypeName(n.ControlType), ClassName: n.ClassName, Rect: n.Rect}
-	} else if f := wr.Focused; f != nil && out.Agent == "" && (!windowed || inGroup(wr.Windows, *target, f.Window)) {
+	} else if f := wr.Focused; f != nil && rootRuntimeID == "" && out.Agent == "" && (!windowed || inGroup(wr.Windows, *target, f.Window)) {
 		out.Focused = &observeFocused{Index: -1, Name: f.Name, ControlType: f.ControlType, ClassName: f.ClassName, Rect: f.Rect}
 	}
 
@@ -211,7 +247,7 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 		text := renderControls(cr.Nodes)
 		out.Controls = &text
 		if in.DiffFrom != "" {
-			if prev, reason := d.diffBase(ctx, in.DiffFrom, vm, target.Handle); prev != nil {
+			if prev, reason := d.diffBase(ctx, in.DiffFrom, vm, target.Handle, rootRuntimeID); prev != nil {
 				out.Controls = nil
 				out.ControlsDiff = diffControls(prev.Nodes, cr.Nodes)
 			} else {
@@ -226,6 +262,11 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 		latest, err := listWindowsResult(ctx, d.call, vm)
 		if err != nil {
 			return nil, nil, agentRequired(err)
+		}
+		if rootRuntimeID != "" {
+			if err := (&action{ws: latest}).checkSession(true); err != nil {
+				return nil, nil, err
+			}
 		}
 		current, ok := findWindow(latest.Windows, target.Handle)
 		if !ok || !sameWindowIdentity(current, *target) || current.Rect != target.Rect || current.Minimized != target.Minimized {
@@ -245,7 +286,11 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 
 // diffBase returns the observation diff_from names when it can be diffed against the current one (same VM, same
 // window, has a control tree); otherwise nil and the reason to report in stale_risk.
-func (d *deps) diffBase(ctx context.Context, id, vm string, handle uint64) (*observation, string) {
+func (d *deps) diffBase(ctx context.Context, id, vm string, handle uint64, roots ...string) (*observation, string) {
+	root := ""
+	if len(roots) != 0 {
+		root = roots[0]
+	}
 	prev, err := d.taskObs(ctx).get(id)
 	switch {
 	case err != nil:
@@ -258,6 +303,8 @@ func (d *deps) diffBase(ctx context.Context, id, vm string, handle uint64) (*obs
 		return nil, fmt.Sprintf("observation %s is of a different window", id)
 	case prev.Nodes == nil:
 		return nil, fmt.Sprintf("observation %s has no control tree", id)
+	case prev.SearchResults || prev.TreeRootRuntimeID != root:
+		return nil, "observations cover different control scopes or a search result set"
 	}
 	return prev, ""
 }
