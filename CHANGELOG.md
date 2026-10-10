@@ -74,6 +74,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `vm_type` into AutoCAD no longer stops with `partial_input` after the first characters of a command name. AutoCAD's dynamic-input tooltip (`CAcDynInputWndControl`, a bare popup owned by the main window on its UI thread) takes the foreground and keyboard focus and forwards the keys to the command line; the agent now accepts such an input popup of the target (`WS_POPUP` without caption, sizing border or system menu, not a dialog, same process and thread, owner chain reaching the target) as the foreground while the target stays visible, enabled and not minimized. Modal dialogs, floating palettes (they have a sizing border and system menu), popups of other threads or processes and other windows still stop the input. Requires the updated guest agent (`vm_update_agent`); the protocol is unchanged.
 - Window integrity inspection uses an aligned token-information buffer and preserves SID pointer provenance, avoiding a crash under Go's race/checkptr instrumentation.
 - `vm_install_agent` confirms the per-installation ID returned by the newly launched agent, so an older running process (including the same version) cannot report success early. Readiness polling stops promptly on cancellation.
 - UI Automation provider failures, including read-only or disabled controls, remain operation failures instead of reporting the responding agent as offline or falling back to raw keyboard input.

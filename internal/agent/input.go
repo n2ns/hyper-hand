@@ -43,11 +43,82 @@ func typeKeys(ctx context.Context, args json.RawMessage, _ []byte) (any, []byte,
 	if err := json.Unmarshal(args, &a); err != nil {
 		return nil, nil, err
 	}
-	r, err := typeKeysWith(ctx, a, inputBackend{validate: validateInputTarget, pressed: inputKeyPressed, send: sendInputEvents})
+	var anchor windows.HWND
+	validate := func(a proto.TypeKeysArgs) error {
+		if anchor == 0 {
+			anchor = inputAnchor(windows.HWND(a.Handle), liveInputWin)
+		}
+		return validateInputTarget(a, anchor)
+	}
+	r, err := typeKeysWith(ctx, a, inputBackend{validate: validate, pressed: inputKeyPressed, send: sendInputEvents})
 	return r, nil, err
 }
 
-func validateInputTarget(a proto.TypeKeysArgs) error {
+const (
+	wsPopup = 0x80000000
+	// A caption, sizing border or system menu marks a window the user works in (a dialog, AutoCAD's floating
+	// palettes: WS_THICKFRAME|WS_SYSMENU without WS_CAPTION), not a transient input popup.
+	wsFrame  = 0x00C00000 | 0x00040000 | 0x00080000 // WS_CAPTION | WS_THICKFRAME | WS_SYSMENU
+	gwlStyle = ^uintptr(15)                         // GWL_STYLE (-16)
+)
+
+var pGetWindowLongPtr = user32.NewProc("GetWindowLongPtrW")
+
+// inputWin is what the input target check reads about a window.
+type inputWin struct {
+	pid, tid                          uint32
+	owner                             windows.HWND
+	style                             uint32
+	class                             string
+	visible, enabled, iconic, cloaked bool
+}
+
+func liveInputWin(h windows.HWND) (inputWin, bool) {
+	var w inputWin
+	tid, err := windows.GetWindowThreadProcessId(h, &w.pid)
+	if err != nil || tid == 0 {
+		return w, false
+	}
+	w.tid = tid
+	owner, _, _ := pGetWindow.Call(uintptr(h), gwOwner)
+	w.owner = windows.HWND(owner)
+	style, _, _ := pGetWindowLongPtr.Call(uintptr(h), gwlStyle)
+	w.style = uint32(style)
+	w.class = className(h)
+	iconic, _, _ := pIsIconic.Call(uintptr(h))
+	w.visible, w.enabled, w.iconic, w.cloaked = windows.IsWindowVisible(h), enabled(h), iconic != 0, cloaked(h)
+	return w, true
+}
+
+// inputHelperOwner returns the owner of h when h is an input helper of it: a bare popup (no caption, sizing border or
+// system menu; not a dialog) of the owner's own UI thread, such as AutoCAD's dynamic-input tooltip (CAcDynInputWndControl), which takes the foreground
+// and keyboard focus as soon as a command name is typed and passes the keys on to the command line.
+func inputHelperOwner(h windows.HWND, look func(windows.HWND) (inputWin, bool)) (windows.HWND, bool) {
+	w, ok := look(h)
+	if !ok || w.owner == 0 || w.style&wsPopup == 0 || w.style&wsFrame != 0 || w.class == "#32770" {
+		return 0, false
+	}
+	o, ok := look(w.owner)
+	if !ok || o.pid != w.pid || o.tid != w.tid {
+		return 0, false
+	}
+	return w.owner, true
+}
+
+// inputAnchor is the window whose input helpers may take the foreground while keys are typed into h: h itself, or
+// for a helper the first owner that is not one.
+func inputAnchor(h windows.HWND, look func(windows.HWND) (inputWin, bool)) windows.HWND {
+	for n := 0; n < 8; n++ {
+		o, ok := inputHelperOwner(h, look)
+		if !ok {
+			break
+		}
+		h = o
+	}
+	return h
+}
+
+func validateInputTarget(a proto.TypeKeysArgs, anchor windows.HWND) error {
 	var id uint32
 	if err := windows.ProcessIdToSessionId(windows.GetCurrentProcessId(), &id); err != nil {
 		return err
@@ -63,16 +134,25 @@ func validateInputTarget(a proto.TypeKeysArgs) error {
 	if locked || secure {
 		return errors.New("keyboard input requires an unlocked, non-secure desktop")
 	}
-	h := windows.HWND(a.Handle)
-	var pid uint32
-	if _, err := windows.GetWindowThreadProcessId(h, &pid); err != nil {
-		return err
+	return checkInputForeground(a, anchor, windows.GetForegroundWindow(), liveInputWin)
+}
+
+// checkInputForeground accepts the foreground window fg for input meant for a.Handle when fg is that window or, with
+// anchor = inputAnchor(a.Handle), anchor or one of its input helpers while anchor is still visible, enabled and not
+// minimized. A modal dialog disables its owner and has a caption, so it never qualifies.
+func checkInputForeground(a proto.TypeKeysArgs, anchor, fg windows.HWND, look func(windows.HWND) (inputWin, bool)) error {
+	usable := func(h windows.HWND) bool {
+		w, ok := look(h)
+		return ok && w.pid == a.PID && w.visible && w.enabled && !w.iconic && !w.cloaked
 	}
-	iconic, _, _ := pIsIconic.Call(uintptr(h))
-	if pid != a.PID || windows.GetForegroundWindow() != h || !windows.IsWindowVisible(h) || !enabled(h) || iconic != 0 || cloaked(h) {
-		return errors.New("keyboard input target is no longer the visible, enabled foreground window with the requested PID")
+	if fg == windows.HWND(a.Handle) && usable(fg) {
+		return nil
 	}
-	return nil
+	if usable(anchor) && usable(fg) && inputAnchor(fg, look) == anchor {
+		return nil
+	}
+	w, _ := look(fg)
+	return fmt.Errorf("keyboard input target is no longer the visible, enabled foreground window with the requested PID (or a bare input popup of it): the foreground is window %d (class %q, pid %d)", uint64(fg), w.class, w.pid)
 }
 
 func inputKeyPressed(vk uint16) bool {

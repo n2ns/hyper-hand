@@ -70,6 +70,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 ## 6. Completed capabilities to keep out of the backlog
 
 - [x] Window groups, target integrity checks, structured tool results/errors, observation IDs and freshness checks.
+- [x] Typing into AutoCAD with its dynamic-input tooltip: the agent accepts a bare input popup of the target (no caption, sizing border or system menu; same process and UI thread; owner chain to the target) as the foreground while the target stays usable, so `vm_type "_qnew\n"` with the cursor in the drawing area runs the command; modal dialogs and floating palettes still stop input. Installed Win10 acceptance: see the [acceptance record](docs/dyninput-acceptance-20261010.md). `Win10-Example` still needs `vm_update_agent`.
 - [x] Required `vm` on every tool except `vm_list` (no default VM; `all_temp` needs `vm`), so a call meant for a VM that is off never reaches another one. Installed-host acceptance with `Win10` and `Win10-Example`: see the [acceptance record](docs/vm-required-acceptance-20261010.md).
 - [x] UIA semantic actions, state readback and four-direction semantic scrolling; custom-provider coverage remains bounded by the acceptance records.
 - [x] UI condition waits and assertions: six window/control kinds, exact enabled/value/state matching, one-shot checks, timeout/cancellation, unknown-state protection and concurrent actions. See the [wait contract](docs/features.md#73-vm_wait).
