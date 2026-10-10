@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 **Breaking:** the MCP tool surface is redesigned for AI callers. Tool names, parameters and result formats change without aliases, and the guest protocol moves to a new generation: the host refuses older agents with `agent_outdated` until `vm_update_agent` is run.
 
+### Migration from 0.2.0
+
+1. **Host.** Install the new release over the old one with `hyperhand.exe install` (one UAC prompt).
+2. **Guest agents.** Run `vm_update_agent` on every VM. Until then every agent call to an old agent is refused with `agent_outdated` (fields `agent_protocol`, `host_protocol`, `next` `call vm_update_agent`); `vm_status`, `vm_doctor` and `vm_update_agent` keep working on it, and `vm_update_agent` replaces a 0.2.0 agent in place. If the agent does not answer, use `vm_install_agent`. A VM restored from an older checkpoint brings back the old agent and needs `vm_update_agent` again.
+3. **Every call names its VM.** Pass `vm` (a name from `vm_list`) on every tool except `vm_list`; there is no default VM. `vm_end_turn` may omit `vm` only to end the whole task.
+4. **Results and errors are JSON.** Parse the single JSON text item of each result (an observation's PNG image comes before it) instead of `ok`, `handle: N`, `name<TAB>state` or `exit_code:` text. An error is an `isError` result whose text is `{"error", "reason", "next", ...}`; follow `next`.
+5. **Replace removed tools and parameters:**
+
+   | 0.2.0 | Now |
+   |---|---|
+   | `vm_screenshot` (`source`, `region`, coordinate metadata) | `vm_observe` (`handle` or `pid`, `max_size`); actions take image pixels with its `observation_id` |
+   | `vm_controls` | `vm_observe` with `controls: true` (indexed text tree), or `vm_find_controls` for one control |
+   | `vm_focus_window` | nothing: actions activate their target (`activate`, default `true`) |
+   | `window`, `title`, `exact` on any tool, title-selected waits | `handle` (from `vm_windows`, `vm_find_controls`, `vm_observe`, `vm_launch` or an action result) or `pid`; `vm_wait` window and control kinds with `handle`/`pid`, `automation_id`, `control_name` or `observation_id` and `index` |
+   | `vm_type` `mode` (clipboard paste) | `vm_type` always types key events; `vm_clipboard_set` then `vm_key ctrl+v` to paste |
+   | `vm_click` `double` | `count: 2` |
+   | `vm_scroll` `delta` | `delta_y` (and `delta_x`) |
+   | `vm_drag` `x1`, `y1`, `x2`, `y2` | `from: {x, y}`, `to: {x, y}` |
+   | `vm_checkpoint` `name` | `label` and `keep`; select checkpoints by the returned `id` |
+   | GUI programs started with `vm_exec` | `vm_launch` (`vm_exec` waits for the command to finish) |
+
+6. **Scripts.** `scripts/restart-tray.ps1` and `scripts/dev-install.ps1` are gone: development installs use `go run ./cmd/hyperhand dev-install`. Scripts without an MCP client can use `client/hyperhand_client.py`; pass one `task_id` per piece of work so that ownership and observations carry over between calls.
+
 ### Removed
 
 - `scripts/restart-tray.ps1`, which installed a build with a UAC prompt. Development installs use `go run ./cmd/hyperhand dev-install` (no UAC, through the preauthorized `HyperHand Dev Install` task registered once with `scripts/dev-install-setup.ps1`).

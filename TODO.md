@@ -6,7 +6,7 @@ This document tracks remaining delivery work, unimplemented capabilities and acc
 
 ## 0. Execution plan (autonomous phases)
 
-A checklist an AI can run phase after phase without the user. In progress. Work the phases in order; each one ends with a commit and push, so an interrupted run resumes at the first unchecked phase.
+A checklist an AI can run phase after phase without the user. Run completed on 2026-10-11; the Blocked items under C need the user. Work the phases in order; each one ends with a commit and push, so an interrupted run resumes at the first unchecked phase.
 
 Every phase follows the same steps:
 
@@ -27,7 +27,8 @@ Stop conditions: a step that needs a user decision, a UAC prompt or work on the 
   Blocked: after a blocked graceful shutdown the guest stays in a pending sign-out that no input reaches, so the unsaved document is not recoverable; how `vm_shutdown` should handle this is a product decision. HyperHand itself did not power off.
 - [x] **D. VM save and pause controls** (section 2, P2). Explicit Save and Pause operations and the resume readiness of the agent and desktop; Win10 acceptance of save, pause and resume.
 - [x] **E. Acceptance evidence export** (section 2, P2). Package versions, environment, steps, assertions, screenshots and file hashes into one reviewable artifact without credentials or unrelated data; produce one for a real Win10 run.
-- [ ] **F. Release preparation** (section 4). Migration notes in `CHANGELOG.md` for removed tools/parameters and guest upgrades; build the release package locally and verify packaged and installed versions and hashes. Stop before tagging: publishing is the user's decision.
+- [x] **F. Release preparation** (section 4). Migration notes in `CHANGELOG.md` for removed tools/parameters and guest upgrades; build the release package locally and verify packaged and installed versions and hashes. Stop before tagging: publishing is the user's decision.
+  Done: migration notes in `CHANGELOG.md`; a `0.3.0` candidate package built with the workflow's build step, installed without UAC and verified on the host and `Win10` (see the [record](docs/release-candidate-20261011.md)). Publishing (version section, tag) is left to the user.
 
 Not in this plan (need the user or the host desktop): the product decisions in section 5; the host tray Restart menu, host self-uninstall (UAC) and interactive host UAC (section 3); display configurations that change VM settings; VMConnect viewer reconnection (host window); publishing the release.
 
@@ -77,7 +78,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 
 ## 4. Release and verification workflow
 
-- [ ] Publish a release containing the current AI-oriented tool surface, the new guest protocol generation, semantic actions, directory mirroring, UI waits/assertions, and control search/subtree observation. They remain under [Unreleased](CHANGELOG.md#unreleased). Include migration notes for removed tools/parameters and guest upgrade requirements; verify packaged and installed binary versions/hashes.
+- [ ] Publish a release (the user's decision; a `0.3.0` candidate package was built and verified, see the [record](docs/release-candidate-20261011.md)) containing the current AI-oriented tool surface, the new guest protocol generation, semantic actions, directory mirroring, UI waits/assertions, and control search/subtree observation. They remain under [Unreleased](CHANGELOG.md#unreleased). Migration notes are in `CHANGELOG.md` and packaged and installed versions and hashes were verified for the candidate; turn `[Unreleased]` into the version's section and tag.
 
 ## 5. Product scope decisions
 
