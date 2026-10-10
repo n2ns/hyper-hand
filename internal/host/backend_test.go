@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,9 +47,11 @@ func TestRestoreThroughBackend(t *testing.T) {
 		fail bool
 		want []string
 	}{
-		{"default starts", map[string]any{"id": "cp-1"}, false, []string{"find:", "find:test", "list:test", "restore:test:cp-1", "find:test", "start:test"}},
+		{"default starts", map[string]any{"vm": "test", "id": "cp-1"}, false, []string{"find:test", "find:test", "list:test", "restore:test:cp-1", "find:test", "start:test"}},
 		{"stay off", map[string]any{"vm": "test", "id": "cp-1", "start": false}, false, []string{"find:test", "find:test", "list:test", "restore:test:cp-1", "find:test"}},
-		{"failure does not start", map[string]any{"id": "cp-1"}, true, []string{"find:", "find:test", "list:test", "restore:test:cp-1"}},
+		{"failure does not start", map[string]any{"vm": "test", "id": "cp-1"}, true, []string{"find:test", "find:test", "list:test", "restore:test:cp-1"}},
+		// No default VM: a restore without vm is refused before the backend is touched.
+		{"missing vm refused", map[string]any{"id": "cp-1"}, true, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b := &lifecycleBackend{state: "Running"}
@@ -77,6 +81,12 @@ func TestRestoreThroughBackend(t *testing.T) {
 			}
 			if !reflect.DeepEqual(b.calls, tc.want) {
 				t.Fatalf("backend calls=%v, want %v", b.calls, tc.want)
+			}
+			if tc.want == nil {
+				var e map[string]any
+				if err := json.Unmarshal([]byte(resultText(r)), &e); err != nil || e["error"] != codeInvalidArgument || !strings.Contains(fmt.Sprint(e["reason"]), "vm is required") {
+					t.Fatalf("missing vm: %s (%v)", resultText(r), err)
+				}
 			}
 			if !tc.fail {
 				var out restoreOut

@@ -230,13 +230,62 @@ func connectTools(t *testing.T, ctx context.Context, b Backend) (*mcp.ClientSess
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { cs.Close() })
+	if vm := fixtureVM(b); vm != "" {
+		fixtureVMs.Store(cs, vm)
+		t.Cleanup(func() { fixtureVMs.Delete(cs) })
+	}
 	return cs, d
 }
 
-// callJSON calls a tool and decodes its JSON text item into out; it fails the test on an isError result.
+// fixtureVMs maps a connectTools session to its fixture VM name (the first running VM of its backend), which the
+// call helpers pass as vm when a call omits it: every tool but vm_list requires vm.
+var fixtureVMs sync.Map
+
+// fixtureVM returns the name of b's first running VM, or "" when b lists none (or cannot list).
+func fixtureVM(b Backend) (name string) {
+	defer func() {
+		if recover() != nil { // a fake without ListVMs
+			name = ""
+		}
+	}()
+	vms, err := b.ListVMs()
+	if err != nil {
+		return ""
+	}
+	for _, v := range vms {
+		if v.State == "Running" {
+			return v.Name
+		}
+	}
+	return ""
+}
+
+// withFixtureVM returns args with vm set to the session's fixture VM when args has no vm key. vm_list takes no vm and
+// vm_end_turn without vm ends the whole task, so both are left as given; an explicit vm (even "") is kept, so a test
+// can still omit vm on purpose by passing "".
+func withFixtureVM(cs *mcp.ClientSession, name string, args map[string]any) map[string]any {
+	if name == "vm_list" || name == "vm_end_turn" {
+		return args
+	}
+	if _, ok := args["vm"]; ok {
+		return args
+	}
+	vm, ok := fixtureVMs.Load(cs)
+	if !ok {
+		return args
+	}
+	out := map[string]any{"vm": vm}
+	for k, v := range args {
+		out[k] = v
+	}
+	return out
+}
+
+// callJSON calls a tool (passing the fixture VM when args omit vm; see withFixtureVM) and decodes its JSON text item
+// into out; it fails the test on an isError result.
 func callJSON(t *testing.T, ctx context.Context, cs *mcp.ClientSession, name string, args map[string]any, out any) {
 	t.Helper()
-	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: withFixtureVM(cs, name, args)})
 	if err != nil {
 		t.Fatalf("%s: %v", name, err)
 	}
@@ -248,10 +297,11 @@ func callJSON(t *testing.T, ctx context.Context, cs *mcp.ClientSession, name str
 	}
 }
 
-// callRefused calls a tool expecting a refusal and returns the decoded error object.
+// callRefused calls a tool (passing the fixture VM when args omit vm) expecting a refusal and returns the decoded
+// error object.
 func callRefused(t *testing.T, ctx context.Context, cs *mcp.ClientSession, name string, args map[string]any) map[string]any {
 	t.Helper()
-	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: withFixtureVM(cs, name, args)})
 	if err != nil {
 		t.Fatalf("%s: %v", name, err)
 	}
