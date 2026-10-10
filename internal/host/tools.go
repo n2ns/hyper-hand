@@ -27,6 +27,7 @@ type vmIn struct {
 //	tools_fileinfo.go vm_file_info
 //	tools_turn.go     vm_end_turn
 //	tools_doctor.go   vm_doctor
+//	batch.go          vm_batch
 type deps struct {
 	s       *mcp.Server
 	m       *Manager
@@ -43,6 +44,8 @@ type deps struct {
 	turn    *turnState
 	tasks   *taskRegistry
 	mirrors *mirrorPlans
+	// handlers are the registered tool handlers by name, as addToolIn wraps them; vm_batch calls its steps through them.
+	handlers map[string]mcp.ToolHandler
 }
 
 // turnState is what vm_end_turn cleans up. Tools register cancellable waits with addWait and temporary checkpoints
@@ -135,6 +138,7 @@ func NewServer(m *Manager) *mcp.Server {
 	registerTurn(d)
 	registerJobs(d)
 	registerDoctor(d)
+	registerBatch(d)
 	return s
 }
 

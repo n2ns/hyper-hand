@@ -8,7 +8,7 @@ It takes care of what every caller otherwise rebuilds:
 - **Arguments.** Arguments go in as `key=value`. A value that parses as JSON is used as JSON; anything else is a string, so Windows paths need no escaping. `@file.json` or `-` (stdin) take a JSON object.
 - **UTF-8.** Arguments and output are UTF-8 on every console.
 - **Errors.** An error result becomes `HyperHandError` (module) or exit code 1 with the error object printed (command line).
-- **Images.** PNG images are saved to files; the path is in the result as `_image`.
+- **Images.** PNG images are saved to files; the path is in the result as `_image` (the last one) and all paths in order as `_images` (a `vm_batch` can return several).
 - **Controls.** Control trees are parsed into dicts, and controls can be selected by type, name, AutomationID, value, state, action or a point.
 
 ## Command line
@@ -55,6 +55,24 @@ python client/hyperhand_client.py --vm Win10 vm_job job_id=job-3f2a9c01b7de wait
 
 Repeat the second call, passing the previous `stdout_next` and `stderr_next` as the offsets, until `complete` is `true`. Reading a job needs no task.
 
+### Several steps in one call
+
+`vm_batch` runs steps in order and stops at the first failure; `${<step>.<path>}` passes a value of an earlier result. Put the steps in a JSON file:
+
+```json
+{"steps": [
+  {"tool": "vm_launch", "args": {"path": "notepad.exe"}},
+  {"tool": "vm_type", "args": {"handle": "${0.handle}", "text": "hello"}},
+  {"tool": "vm_observe", "args": {"handle": "${0.handle}"}}
+]}
+```
+
+```text
+python client/hyperhand_client.py --vm Win10 --task-file temp/hh-task vm_batch @steps.json
+```
+
+The HTTP timeout is the sum of the steps' timeouts, so long steps need no `--timeout`.
+
 ## Module
 
 ```python
@@ -82,7 +100,7 @@ API summary:
 
 | Function | Behavior |
 |---|---|
-| `HyperHand(vm=None, task_id=None, url=None, out_dir=None, timeout=120)` | Opens one MCP session on first use. `task_id=""` sends no task ID. `out_dir` defaults to `./temp/hyperhand`. The HTTP timeout grows to fit `timeout_ms` and `wait_ms`. `close()`, or leaving the `with` block, deletes the session but does not end the task. |
+| `HyperHand(vm=None, task_id=None, url=None, out_dir=None, timeout=120)` | Opens one MCP session on first use. `task_id=""` sends no task ID. `out_dir` defaults to `./temp/hyperhand`. The HTTP timeout grows to fit `timeout_ms` and `wait_ms` (summed over the steps of `vm_batch`). `close()`, or leaving the `with` block, deletes the session but does not end the task. |
 | `call(tool, arguments=None, /, *, http_timeout=None, **kwargs)` | Tool arguments come from the optional positional dict and from keywords; every tool argument name works as a keyword, including `args` (`hh.call("vm_launch", path=..., args=["/nologo"])`). `http_timeout` (seconds) overrides the HTTP timeout. Returns the result dict. Raises `HyperHandError` (`code`, `reason`, `next`, `obj`) on a tool error and `TransportError` when the server cannot be reached. |
 | `end_turn(vm=None, **kwargs)` | `vm_end_turn` for this task. |
 | `tools()` | The live tool list. |

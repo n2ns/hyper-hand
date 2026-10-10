@@ -219,6 +219,7 @@ func connectTools(t *testing.T, ctx context.Context, b Backend) (*mcp.ClientSess
 	registerVM(d)
 	registerTurn(d)
 	registerLaunch(d)
+	registerBatch(d)
 	st, ct := mcp.NewInMemoryTransports()
 	ss, err := s.Connect(ctx, st, nil)
 	if err != nil {
@@ -354,7 +355,7 @@ func TestVMListAndCheckpointsShapes(t *testing.T) {
 		t.Fatal(err)
 	}
 	readOnly := map[string]bool{"vm_list": true, "vm_status": true, "vm_checkpoints": true, "vm_clipboard_get": true, "vm_pull": true, "vm_wait": true}
-	destructive := map[string]bool{"vm_turn_off": true, "vm_restore": true, "vm_shutdown": true, "vm_update_agent": true, "vm_push": true, "vm_end_turn": true, "vm_checkpoint_delete": true}
+	destructive := map[string]bool{"vm_turn_off": true, "vm_restore": true, "vm_shutdown": true, "vm_update_agent": true, "vm_push": true, "vm_end_turn": true, "vm_checkpoint_delete": true, "vm_batch": true}
 	names := map[string]bool{}
 	for _, tool := range tools.Tools {
 		names[tool.Name] = true

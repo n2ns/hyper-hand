@@ -46,6 +46,8 @@ Every refusal and failure is returned as an MCP result with `isError: true` whos
 | `ambiguous_target` | `pid` alone selects a process with several visible windows; `handles` lists them. A checkpoint `name` that several checkpoints have; `ids` lists them (see 3.3) |
 | `no_window` | No visible window has the given `handle` or `pid`, no window is in the foreground when one is needed, or `vm_launch` saw no window in time |
 | `elevation_timeout` | `vm_exec` with `admin`: `timeout_ms` passed before elevation completed (an unanswered UAC prompt, or a timeout too short to elevate), so the command did not run; field `timeout_ms` (see 5.5) |
+| `step_failed` | `vm_batch`: a step returned an error and the batch stopped; fields `failed_step`, `last_completed`, `completed`, `steps` (the failed entry's `error` is the step's own error object) (see 7.6) |
+| `assertion_failed` | `vm_wait` with `assert`: the UI condition was not satisfied (see 7.3). `vm_batch`: a step ran but its result failed an assertion; field `failed_assertion` with the `actual` value, plus the `step_failed` fields (see 7.6) |
 | `no_checkpoint` | No checkpoint has the given `id` or `name` (field `id` or `name`), or the selected checkpoint disappeared before the operation; `next` is `call vm_checkpoints and pass a listed id` (see 3.3) |
 
 ### 2.3 VM selection

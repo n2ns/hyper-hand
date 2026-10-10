@@ -66,6 +66,15 @@ _SLOW = {"vm_end_turn": 1800, "vm_checkpoint_delete": 1800, "vm_checkpoint": 600
          "vm_pull": 3600}
 
 
+def _needed_timeout(tool, a):
+    """Seconds a call may take: its timeout_ms / wait_ms plus a margin, at least the tool's minimum in _SLOW; for
+    vm_batch the sum over its steps."""
+    if tool == "vm_batch":
+        return sum(_needed_timeout(s.get("tool"), s.get("args") or {}) for s in a.get("steps") or [] if isinstance(s, dict))
+    longest = max(int(a.get("timeout_ms") or 0), int(a.get("wait_ms") or 0)) / 1000
+    return max(longest + 30, _SLOW.get(tool, 0))
+
+
 def new_task_id(purpose=""):
     """A fresh task ID such as task-deploy-3f2a9c01 (task-3f2a9c01 without purpose); pass the same one on every call
     of one piece of work."""
@@ -303,11 +312,13 @@ class HyperHand:
         return self._request("tools/list", {}, self.timeout)["tools"]
 
     def call(self, tool, arguments=None, /, *, http_timeout=None, **kwargs):
-        """Call a tool and return its JSON result as a dict (plus "_image": the saved PNG path, when there was one).
+        """Call a tool and return its JSON result as a dict (plus "_image": the saved PNG path, when there was one, and
+        "_images": every saved PNG path in order, for a vm_batch with several images).
 
         Arguments come from an optional positional dict and keyword arguments, so every tool argument name works as a
         keyword (vm_launch args=[...] included); vm and task_id are added unless given. http_timeout (seconds) is the
-        HTTP timeout; it defaults to the client's, raised to fit timeout_ms / wait_ms arguments of long calls."""
+        HTTP timeout; it defaults to the client's, raised to fit timeout_ms / wait_ms arguments of long calls (summed over
+        the steps of a vm_batch)."""
         a = dict(arguments or {})
         a.update(kwargs)
         if self.vm is not None and tool != "vm_list":
@@ -315,16 +326,16 @@ class HyperHand:
         if self.task_id:
             a.setdefault("task_id", self.task_id)
         if http_timeout is None:
-            longest = max(int(a.get("timeout_ms") or 0), int(a.get("wait_ms") or 0)) / 1000
-            http_timeout = max(self.timeout, longest + 30, _SLOW.get(tool, 0))
+            http_timeout = max(self.timeout, _needed_timeout(tool, a))
         return self._result(tool, self._request("tools/call", {"name": tool, "arguments": a}, http_timeout))
 
     def _result(self, tool, result):
-        obj, image = None, None
+        obj, images = None, []
         for item in result.get("content", []):
             if item.get("type") == "image":
                 os.makedirs(self.out_dir, exist_ok=True)
                 image = os.path.join(self.out_dir, f"{tool}-{time.strftime('%H%M%S')}-{uuid.uuid4().hex[:6]}.png")
+                images.append(image)
                 with open(image, "wb") as f:
                     f.write(base64.b64decode(item["data"]))
             elif item.get("type") == "text":
@@ -334,8 +345,9 @@ class HyperHand:
                     obj = {"text": item["text"]}
         if obj is None:
             obj = {}
-        if image:
-            obj["_image"] = image
+        if images:
+            obj["_image"] = images[-1]
+            obj["_images"] = images
         if result.get("isError"):
             raise HyperHandError(tool, obj)
         return obj

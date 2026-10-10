@@ -143,6 +143,16 @@ class ClientTest(unittest.TestCase):
         self.assertNotIn("task_id", Stub.calls[0]["arguments"])
         self.assertEqual(hh.end_turn(vm="Win10"), {"ok": True})
 
+    def test_batch_saves_every_image_and_sums_step_timeouts(self):
+        Stub.reply = lambda p: {"content": text({"ok": True}, image=True)["content"] * 2}
+        hh = hc.HyperHand(vm="Win10", url=self.url, out_dir=self.out)
+        r = hh.call("vm_batch", steps=[{"tool": "vm_observe"}, {"tool": "vm_observe"}])
+        self.assertEqual(len(r["_images"]), 2)
+        self.assertEqual(r["_image"], r["_images"][1])
+        steps = [{"tool": "vm_exec", "args": {"timeout_ms": 600000}}, {"tool": "vm_restore"}, "junk"]
+        self.assertEqual(hc._needed_timeout("vm_batch", {"steps": steps}), 630 + 600)
+        self.assertEqual(hc._needed_timeout("vm_exec", {"timeout_ms": 1000}), 31)
+
     def test_transport_error(self):
         hh = hc.HyperHand(url="http://127.0.0.1:9/mcp", timeout=2)
         with self.assertRaises(hc.TransportError):

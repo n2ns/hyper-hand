@@ -1,8 +1,8 @@
-# 7. Clipboard, Launching, Waiting and Turn End
+# 7. Clipboard, Launching, Waiting, Turn End and Batches
 
 Part of [HyperHand features](../features.md). Section numbers such as 8.6 refer to the chapters listed there.
 
-These tools need the agent, except `vm_end_turn`.
+These tools need the agent, except `vm_end_turn` and `vm_batch` (whose steps need what their tools need).
 
 ### 7.1 vm_clipboard_get and vm_clipboard_set
 
@@ -64,3 +64,21 @@ UI conditions use host-side polling with a 300 ms interval between samples. They
 - `launch` preserves the executable, argument array and working directory. Pass it directly to `vm_launch` with the same VM. IDs are stable for the same launch specification; different arguments or working directories remain distinct entries. IDs are identifiers for discovery, not selectors accepted by `vm_launch`. App Paths' optional `Path` value is an extra executable search path, not a working directory; `vm_launch` does not apply that extra environment value.
 - `running` matches the full executable path against processes in the agent's Windows session, not just the filename. It does not prove that the process was started with a particular shortcut's arguments. `windows` lists that executable's visible windows in the session; a running background application may have none. Pass a returned `handle` directly to `vm_observe` to reuse an existing window. If `warnings` reports unreadable processes, `running: false` is not proof that the application is stopped.
 - Discovery reads fresh sources on every request. Partial source failures are reported in `warnings` while usable results are preserved; absence from an incomplete result does not prove an application is uninstalled. An older agent without `list_apps` returns `agent_outdated`: call `vm_update_agent`.
+
+### 7.6 vm_batch
+
+`vm_batch` runs ordered tool steps in one call and stops at the first failure. It is a host-side sequence of ordinary tool calls: it adds no guest operation and no retry.
+
+- Parameters: `vm` (required) and `steps`, 1 to 64 objects `{tool, args, assert}`. `args` are the step tool's arguments without `vm` and `task_id`: every step runs on the batch's `vm` and in the batch's task. `vm_batch` and `vm_end_turn` cannot be steps.
+- Each step goes through the step tool's own handler exactly like a direct call: argument validation, VM lookup, task ownership (a writing step claims the VM; read-only steps do not), observation checks and errors are the same. The batch itself claims nothing.
+- References: a string argument that is exactly `${<step>.<path>}` is replaced by that value of an earlier step's result, keeping its JSON type, for example `"handle": "${0.handle}"` after a `vm_launch` step or `"observation_id": "${2.observation_id}"`. `path` is dot-separated keys and array indexes (`windows.0.handle`). Such a string is always a reference. A reference to a missing or null value fails its step with `invalid_argument` before the step runs.
+- Assertions: `assert` is a list of `{path, equals | contains | exists}` checked in order on the step's JSON result after it succeeded. `equals` compares JSON values (numbers by value), `contains` needs a string containing the text, `exists: true` a non-null value and `exists: false` a missing or null one. UI state is asserted with a `vm_wait` step (`check_only`, `assert`, see 7.3).
+- Before any step runs, the batch is refused with `invalid_argument` and field `step` for: no steps or more than 64, an unknown or excluded tool, `args.vm` naming another VM, `args.task_id`, a reference to the same or a later step, and an assertion without a path or without exactly one condition. Step arguments themselves are only validated when the step is reached.
+- Success: `{"vm", "completed", "steps": [{"step", "tool", "ok", "result", "images", "assertions_passed"}]}`. `result` is the step's JSON result without `task_id` and `run_id`. The steps' PNG images are image items before the text item, in step order; `images` holds their indexes.
+- A stop is an error whose fields are `vm`, `failed_step`, `last_completed` (the step before it, `-1` if none), `completed` and `steps` (every step run, the failed one included), with the images so far:
+  - `step_failed`: the step returned an error; its entry's `error` is the step's own error object with its `next`. Whether the step's effects happened is what that error says.
+  - `assertion_failed`: the step ran (its effects happened) and its `result` is in its entry; `failed_assertion` is `{path, equals | contains | exists, actual, message}`.
+  - `invalid_argument`: a reference could not be resolved; the step did not run.
+  - `failed`: the call was cancelled before a step started.
+- `next` says which steps completed and that nothing was repeated: observe the state and send a new `vm_batch` with only the remaining steps that still apply.
+- `vm_end_turn` waits for a running batch like any call of the task; it cancels a `vm_wait` step that is waiting, which stops the batch with `step_failed`, and steps after it are refused with `task_busy` while the cleanup runs.

@@ -32,6 +32,8 @@ const (
 	codeNoWindow            = "no_window"           // no window matched, or none appeared
 	codeNoCheckpoint        = "no_checkpoint"       // no checkpoint has the given id or name
 	codeElevationTimeout    = "elevation_timeout"   // vm_exec admin: elevation did not complete in time; the command did not run
+	codeStepFailed          = "step_failed"         // vm_batch: a step returned an error; the batch stopped there
+	codeAssertionFailed     = "assertion_failed"    // vm_batch: a step ran but its result failed an assertion; the batch stopped there
 )
 
 // toolError is a structured refusal: Code is one of the code constants, Reason says what happened, Next names the
@@ -152,7 +154,7 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 	}
 	// The generic SDK wrapper returns plain text for schema errors before our
 	// handler runs. Validate here so invalid arguments obey the same JSON contract.
-	d.s.AddTool(tool, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	handler := func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var in In
 		inputErr := decodeToolArguments(req.Params.Arguments, resolved, &in)
 		var args struct {
@@ -189,6 +191,10 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 			var p pushIn
 			_ = json.Unmarshal(req.Params.Arguments, &p)
 			readOnly = p.Mode == "mirror" && (p.Phase == "" || p.Phase == "plan")
+		}
+		if spec.name == "vm_batch" {
+			// Each step claims the VM itself when it writes, so a batch of read-only steps leaves ownership alone.
+			readOnly = true
 		}
 		if spec.name == "vm_job" {
 			// Reading a job needs no ownership, so a reconnecting script with a new task can collect its result.
@@ -247,7 +253,12 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 			return taskResult(errorResult(d.taskRunID(ctx), err), task), nil
 		}
 		return taskResult(r, task), nil
-	})
+	}
+	if d.handlers == nil {
+		d.handlers = map[string]mcp.ToolHandler{}
+	}
+	d.handlers[spec.name] = handler // vm_batch runs its steps through these
+	d.s.AddTool(tool, handler)
 }
 
 func invalidToolArguments(tool string, err error) error {

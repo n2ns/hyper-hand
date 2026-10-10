@@ -19,7 +19,7 @@ Every phase follows the same steps:
 Stop conditions: a step that needs a user decision, a UAC prompt or work on the host desktop, or a failure that cannot be reproduced, is recorded under the phase as "Blocked: ..." and the run continues with the next phase. Never push a release tag.
 
 - [x] **A. Housekeeping.** Correct stale statuses in this TODO (for example, `Win10-Example` agents have been updated). Keep the historical Go experiments under ignored `build/` out of package discovery so that `go test -race ./...` passes cleanly (section 4); preserve those artifacts.
-- [ ] **B. Sequential batches with assertions** (section 2, P2). One tool call runs ordered tool steps with per-step results and optional assertions, stops at the first failure or failed assertion, reports the last completed step and never repeats a side-effecting step automatically. Contract, tests, Win10 acceptance with a real multi-step UI flow.
+- [x] **B. Sequential batches with assertions** (section 2, P2). One tool call runs ordered tool steps with per-step results and optional assertions, stops at the first failure or failed assertion, reports the last completed step and never repeats a side-effecting step automatically. Contract, tests, Win10 acceptance with a real multi-step UI flow.
 - [ ] **C. Automatable acceptance gaps** (sections 1 and 3), on `Win10` only: mirror expired plans, old-agent upgrade errors, cancellation and mid-transfer disconnects with staging cleanup; guest uninstall and reinstall (independent recovery path); blocked graceful shutdown with an unsaved disposable document; long checkpoint merges at the timeout boundary; Production-only checkpoints; hung UI threads. Fix what fails (reproduce first).
 - [ ] **D. VM save and pause controls** (section 2, P2). Explicit Save and Pause operations and the resume readiness of the agent and desktop; Win10 acceptance of save, pause and resume.
 - [ ] **E. Acceptance evidence export** (section 2, P2). Package versions, environment, steps, assertions, screenshots and file hashes into one reviewable artifact without credentials or unrelated data; produce one for a real Win10 run.
@@ -48,7 +48,6 @@ These are development candidates, not authorization to implement all of them tog
 | Priority | Capability | Minimum delivery and acceptance |
 | --- | --- | --- |
 | P2 | VM save and pause controls | Add explicit Save/Pause operations and define resume readiness for the agent and desktop. Saved/Paused states are already recognized, and `vm_start` already requests Running; checkpoint restore is a separate capability. |
-| P2 | Sequential batches with assertions | Execute ordered tool steps with per-step results, stop on failure and identify the last completed step. Do not automatically repeat side effects. Existing key sequences and action readback remain available. |
 | P2 | Acceptance evidence export | Package versions, environment, steps, assertions, screenshots and file hashes into a reviewable artifact. Exclude credentials and unrelated data. Current evidence primarily consists of local ignored files. |
 | P2 | VMConnect viewer reconnection | Recover the host viewer after VM lifecycle operations leave it disconnected. Verify viewer recovery separately from guest command and screenshot connectivity; the latter can remain healthy while the viewer is disconnected. |
 
@@ -102,6 +101,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 - [x] Duplicate-name ambiguity for checkpoint restore, keep and delete; this was already verified in the 2026-10-10 acceptance.
 - [x] Desktop application discovery and `vm_doctor` diagnostics.
 - [x] Historical Go experiments under ignored `build/` stay out of package discovery: the tracked `build/go.mod` makes that directory a separate module, so `go vet ./...` and `go test -race ./...` pass in this workspace (2026-10-11); the artifacts were kept.
+- [x] Sequential batches with assertions: `vm_batch` runs up to 64 tool steps through the tools' own handlers, passes earlier results by `${<step>.<path>}`, checks results with `equals`/`contains`/`exists`, stops at the first `step_failed` or `assertion_failed` with `failed_step` and `last_completed`, and never repeats a step. See the [batch contract](docs/features/clipboard-launch-wait.md#76-vm_batch) and the [acceptance record](docs/batch-acceptance-20261011.md).
 - [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; additional interruption/upgrade coverage remains in section 1, and release remains in section 4.
 
 The old title selectors remain removed. UI waits use HWND/PID, exact control properties or observation-bound runtime identity; they do not restore the legacy title-based interface.
