@@ -8,7 +8,8 @@
 
 ## Test VMs are disposable
 
-- The Hyper-V VMs this project is developed and tested against (such as Win10) can be thrown away and rebuilt at any time.
+- Develop and accept HyperHand on the `Win10` VM. `Win10-Example` belongs to Example testing; do not use it for HyperHand work.
+- The Hyper-V VMs this project is developed and tested against can be thrown away and rebuilt at any time.
 - Do not worry about, warn about or ask about security inside the VMs: automatic logon, plain-text passwords, disabling UAC prompts, lowering security policy, passing passwords through `vm_exec` and the like. Whatever gets the automated tests running, do it the simplest way.
 - This applies to the guest VMs only. Accounts, permissions and security settings on the host (the physical machine) are still handled with care: do not change the user's own account or its group memberships. The installer's changes to the dedicated service account are part of the product and are not affected.
 
@@ -19,10 +20,14 @@ Run from the repository root:
 ```powershell
 go build -ldflags "-H windowsgui" -o build\hyperhand.exe .\cmd\hyperhand
 go build -ldflags "-H windowsgui" -o build\hyperhand-agent.exe .\cmd\hyperhand-agent
-go test -race ./...
+go vet ./cmd/... ./internal/...
+go test -race ./cmd/... ./internal/...
 scripts\restart-tray.ps1   # reinstalls the host components from build\ and restarts them, one UAC prompt
 ```
 
+- Test `./cmd/...` and `./internal/...`, not `./...`: the ignored `build\` directory holds old Go experiments that no longer compile.
 - The running service and tray use the installed copies under `%ProgramFiles%\HyperHand`; the files in `build\` are not the running version. Update the guest agent with `vm_update_agent`.
 - Never kill processes by name (`taskkill /IM`, `Stop-Process -Name`); the installer owns service and tray replacement.
-- Record behavior changes under `[Unreleased]` in `CHANGELOG.md` (Keep a Changelog format). Releasing: see the Releasing section of `docs/user-guide.md`.
+- Do not add PowerShell or batch to the installer (`cmd/hyperhand/setup_*.go`).
+- When a change to `internal/proto` alters what the host and agent exchange, increment `proto.Protocol`; the host refuses older agents with `agent_outdated` and there is no compatibility path.
+- A behavior change updates `docs/features.md` (the exact behavior), `docs/user-guide.md` where usage changes, and `[Unreleased]` in `CHANGELOG.md` (Keep a Changelog format), in the same commit. Releasing: see the Releasing section of `docs/user-guide.md`.
