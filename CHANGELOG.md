@@ -13,7 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `vm_screenshot`: replaced by `vm_observe`. There is no `source`, `region` or coordinate metadata to apply; actions take image pixels of an observation.
 - `vm_controls`: replaced by `vm_observe` with `controls: true`, which returns the tree as indexed text instead of JSON nodes.
 - `vm_focus_window`: actions activate their target window themselves (`activate`, default `true`).
-- The `vm_wait` conditions `window_exists`, `window_gone` and `window_foreground`; `process_running`, `process_exit` and `file_exists` remain. Window changes are seen in an action's `after` observation or with `vm_observe`.
+- Legacy title-selected window waits; the new UI conditions use HWND/PID or observation/control identity instead.
 - Title selectors: the `window`, `title` and `exact` parameters of every tool. Windows are selected by `handle` (from `vm_windows`, `vm_observe`, `vm_launch` or an action result) or `pid` only.
 - `vm_type` `mode`: the clipboard paste path is gone; text is injected as Unicode key events, with the Hyper-V keyboard for ASCII text when the agent is not available.
 - `vm_click` `double` (use `count`), `vm_scroll` `delta` (use `delta_y`), `vm_drag` `x1`/`y1`/`x2`/`y2` (use `from`/`to`), `vm_checkpoint` `name` (use `label` and `keep`).
@@ -45,6 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- UI conditions in `vm_wait`: window appearance, disappearance and foreground; control appearance, disappearance and exact enabled/value/state matching. Supports `check_only`, `assert` with `assertion_failed`, bounded host polling, concurrent actions, task cancellation and structured last-state evidence. Ambiguous, stale, truncated, password-redacted and unavailable provider results cannot silently satisfy an assertion.
 - Directory mirroring through `vm_push mode: mirror`: read-only `phase: plan` lists copies, empty directories and deletions; `phase: apply` consumes a task/VM-bound plan after rechecking both inventories. Changed files are staged and verified before extra files and empty directories are removed. Drift, partial completion and unconfirmed responses are distinct results; failed applies require a new plan. Ordinary copy behavior is unchanged. Mirror rejects links, type conflicts and manifests exceeding 4096 entries or 1 MiB per side.
 - `vm_invoke` supports control-targeted `ScrollUp`, `ScrollDown`, `ScrollLeft` and `ScrollRight` through UIA ScrollPattern, one small provider-defined step per call. Observations and results include supported axes and scroll percentages; verification reports observed directional movement, including `false` at an unchanged boundary.
 - Control observations expose executable `actions` and readable semantic `state` (toggle, expansion, selection, read-only and offscreen); unknown properties stay absent and `controls_diff` includes capability/state changes. Unsupported actions report action names rather than UIA pattern names.

@@ -98,7 +98,7 @@ Every tool takes an optional `vm` (VM name). Without it, the only running VM is 
 | `vm_exec` | Run a command to completion in the guest; `shell`, `cwd`, `timeout_ms`, `admin` |
 | `vm_push`, `vm_pull` | Copy files or directories host to guest and back; `vm_push` skips unchanged files unless `force` is true. `mode: mirror` synchronizes exact directory contents with `phase: plan` then `phase: apply` and the returned `plan_id` |
 | `vm_clipboard_get`, `vm_clipboard_set` | Read or write the guest clipboard |
-| `vm_wait` | Wait until a process exits or runs, or a file exists |
+| `vm_wait` | Wait for a process, file or UI condition; check or assert window/control state |
 | `vm_end_turn` | End this task's work: cancel its waits, clean up its temporary checkpoints and release its VM ownership; `vm` limits cleanup to one VM |
 | `vm_install_agent`, `vm_update_agent` | Install or replace the guest agent |
 

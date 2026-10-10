@@ -570,14 +570,25 @@ Use `vm_apps` first when the program's path is unknown (see 7.5). Pass the retur
 
 ### 7.3 vm_wait
 
-`vm_wait` polls the guest every 300 ms until a condition holds or `timeout_ms` (default 60000) expires. Result: `{"satisfied": true, "elapsed_ms": 1200}`; a timeout returns `"satisfied": false` and is not an error.
+`vm_wait` waits until a condition holds or `timeout_ms` (default 60000) expires. A normal timeout returns `"satisfied": false`; UI conditions also support one-shot checks and assertions.
 
 - `kind` = `process_running`: a process named `name` exists.
 - `kind` = `process_exit`: no process named `name` exists (true immediately if none was running).
 - Process names are compared case-insensitively on the executable name; a directory part is ignored and `.exe` is added if missing, so `notepad`, `Notepad.exe` and `C:\Windows\notepad.exe` are equivalent.
 - `kind` = `file_exists`: `path` exists (a file or a directory).
-- An empty `name` or `path` for its kind, or any other `kind`, is `invalid_argument`. There are no window conditions: observe the window with `vm_observe`, or use an action's `after` observation.
+- These process/file conditions keep their guest-side 300 ms polling and result `{"satisfied": true, "elapsed_ms": 1200}`. An empty `name` or `path` for its kind is `invalid_argument`; UI-only arguments are refused for these kinds.
 - `vm_end_turn` cancels pending waits: the cancelled call returns `failed` with reason `the wait was cancelled by vm_end_turn` and `elapsed_ms`. Cancellation by the MCP client is an error too. If the host disconnects, the wait stops (see 1.4).
+
+UI conditions use host-side polling with a 300 ms interval between samples. They release the agent connection between samples and do not hold the input lock, so other tools can act while a wait is pending. They are read-only and do not activate windows or change controls.
+
+- `window_exists`, `window_gone`, `window_foreground`: select a top-level window with `handle` or `pid` (or both). Multiple matches are `ambiguous_target`. There are no title selectors.
+- `control_exists`, `control_gone`, `control_matches`: select a control with `observation_id` and `index`, or with `handle`/`pid` plus an exact `automation_id` and/or `control_name`. Both properties, when supplied, must match. Multiple matches are `ambiguous_target`; no first-match fallback is used.
+- Observation selectors retain the observed window and control runtime identity. Property selectors can wait for a control that does not exist yet. VM lifecycle changes and reuse of the selected window handle for a different identity are `stale_observation`.
+- `control_matches` requires one or more expected fields: `enabled`, `value`, or a `state` object using the control-state fields returned by `vm_observe`. All supplied fields must match exactly. `false`, zero and an empty `value` are real expectations, not omitted values. Other UI kinds refuse these predicates.
+- Missing ValuePattern/state, password redaction, or incomplete trees cannot prove a match or disappearance. `last.unknown` explains why the result is inconclusive. Property lookup in a truncated tree cannot prove uniqueness even when a matching node is present. An observation's known runtime ID may still be found in a bounded tree, but missing nodes do not prove disappearance. Increase `max_depth`/`max_nodes` when appropriate (defaults 4/200, caps 10/1000).
+- `check_only: true` takes one sample. `assert: true` makes an unsatisfied check or timeout return `assertion_failed` as an MCP error. Without `assert`, the result is successful tool execution with `satisfied: false`.
+- Completed UI checks and waits contain `{satisfied, elapsed_ms, last}`; `last` carries the observed window/control identity, available actual state and uncertainty. Assertion failures and sampling errors include the same fields. Session/provider failures remain errors rather than being interpreted as a missing window/control. A timeout during an unfinished provider call is also an error. Argument and observation-validation errors can occur before the first sample.
+- UI `timeout_ms` accepts 0 for the 60000 ms default, or 1..600000. Each guest read is bounded by 12 seconds and the remaining wait budget; a one-shot check is bounded by 12 seconds. These conditions use the existing generation-2 guest operations.
 
 ### 7.4 vm_end_turn
 

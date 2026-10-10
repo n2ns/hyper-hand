@@ -57,11 +57,24 @@ type restoreIn struct {
 	SaveCurrent bool   `json:"save_current,omitempty" jsonschema:"first save the current state as a temp checkpoint labelled before-restore; default false (the current state is lost)"`
 }
 type waitIn struct {
-	VM        string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
-	Kind      string `json:"kind" jsonschema:"process_exit or process_running (use name), or file_exists (use path)"`
-	Name      string `json:"name,omitempty" jsonschema:"process name, e.g. notepad"`
-	Path      string `json:"path,omitempty" jsonschema:"file path in the guest"`
-	TimeoutMs int    `json:"timeout_ms,omitempty" jsonschema:"default 60000"`
+	VM            string              `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
+	Kind          string              `json:"kind" jsonschema:"process_exit/process_running (name), file_exists (path), window_exists/window_gone/window_foreground (handle or pid), control_exists/control_gone/control_matches (observation_id and index, or handle/pid and automation_id/control_name)"`
+	Name          string              `json:"name,omitempty" jsonschema:"process name, e.g. notepad"`
+	Path          string              `json:"path,omitempty" jsonschema:"file path in the guest"`
+	TimeoutMs     int                 `json:"timeout_ms,omitempty" jsonschema:"default 60000"`
+	Handle        uint64              `json:"handle,omitempty" jsonschema:"UI conditions: visible window handle; optionally restricted by pid"`
+	PID           uint32              `json:"pid,omitempty" jsonschema:"UI conditions: process's only visible window, or restrict handle"`
+	ObservationID string              `json:"observation_id,omitempty" jsonschema:"control conditions: task-owned observation with a stable control runtime ID; requires index"`
+	Index         *int                `json:"index,omitempty" jsonschema:"control index from observation_id (including zero)"`
+	AutomationID  string              `json:"automation_id,omitempty" jsonschema:"exact control AutomationId; combined with control_name using AND; matches must be unique"`
+	ControlName   string              `json:"control_name,omitempty" jsonschema:"exact control name; requires handle or pid; matches must be unique"`
+	Enabled       *bool               `json:"enabled,omitempty" jsonschema:"control_matches: expected enabled state"`
+	Value         *string             `json:"value,omitempty" jsonschema:"control_matches: exact readable ValuePattern text; an empty string is valid; unavailable or truncated values never match"`
+	State         *proto.ControlState `json:"state,omitempty" jsonschema:"control_matches: expected readable state fields, combined using AND; missing actual fields are unknown"`
+	Assert        bool                `json:"assert,omitempty" jsonschema:"UI conditions: return assertion_failed on an unmet condition instead of satisfied false"`
+	CheckOnly     bool                `json:"check_only,omitempty" jsonschema:"UI conditions: sample once instead of polling; timeout_ms zero still means the default timeout"`
+	MaxDepth      int                 `json:"max_depth,omitempty" jsonschema:"UI control tree depth: default 4, maximum 10"`
+	MaxNodes      int                 `json:"max_nodes,omitempty" jsonschema:"UI control tree size: default 200, maximum 1000"`
 }
 type clipboardIn struct {
 	VM   string `json:"vm,omitempty" jsonschema:"VM name; default: the only running VM"`
@@ -154,7 +167,7 @@ type restoreOut struct {
 }
 
 // waitKinds are the conditions vm_wait accepts.
-var waitKinds = []string{"process_running", "process_exit", "file_exists"}
+var waitKinds = []string{"process_running", "process_exit", "file_exists", "window_exists", "window_gone", "window_foreground", "control_exists", "control_gone", "control_matches"}
 
 // vmErr classifies a VM lookup error: an unknown or ambiguous name is invalid_argument, anything else "failed".
 func vmErr(err error) error {
@@ -467,7 +480,13 @@ func registerVM(d *deps) {
 		}
 		return jsonResult(map[string]any{"ok": true})
 	})
-	addToolIn(d, toolSpec{name: "vm_wait", desc: "Wait until a process runs (process_running) or exits (process_exit), or a file exists (file_exists), up to timeout_ms (default 60 s; satisfied is then false). vm_end_turn cancels only the selected task's waits (and only the selected VM when vm is supplied).", readOnly: true, idempotent: true}, func(ctx context.Context, in waitIn) (*mcp.CallToolResult, error) {
+	addToolIn(d, toolSpec{name: "vm_wait", desc: "Wait for process_running/process_exit (name), file_exists (path), window_exists/window_gone/window_foreground (handle or pid), or control_exists/control_gone/control_matches. Controls use observation_id plus index, or handle/pid plus exact automation_id/control_name (AND, unique match). control_matches compares enabled, value and state fields using AND; unknown/truncated data never satisfies a comparison or proves disappearance. UI waits poll on the host every 300 ms without holding the input lock; timeout_ms defaults to 60000 (UI maximum 600000). check_only samples once. assert returns assertion_failed when unsatisfied. UI results include satisfied, elapsed_ms and last observed identity/state or unknown reason. Agent/provider errors remain errors. No UI action is performed. vm_end_turn cancels only the selected task's waits (and only the selected VM when vm is supplied)." + descUntrusted, readOnly: true, idempotent: true}, func(ctx context.Context, in waitIn) (*mcp.CallToolResult, error) {
+		if isUIWait(in.Kind) {
+			return d.waitUI(ctx, in)
+		}
+		if hasUIWaitArguments(in) {
+			return nil, refuse(codeInvalidArgument, "use UI arguments only with a UI condition kind", nil, "UI selectors, assertions and check_only do not apply to %s", in.Kind)
+		}
 		switch in.Kind {
 		case "process_running", "process_exit":
 			if in.Name == "" {
