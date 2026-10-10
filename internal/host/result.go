@@ -133,6 +133,7 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 	schema.Properties["task_id"] = &jsonschema.Schema{Type: "string", Description: "Unique AI task identifier. Reuse on every call when sharing a session or reconnecting; omit only for a dedicated persistent MCP session. vm_end_turn without vm ends this task; use a new ID afterwards."}
 	// vm is required everywhere but vm_list and vm_end_turn (see vmRequired): a default VM let a call land on another
 	// VM whenever the intended one was off.
+	hasVM := schema.Properties["vm"] != nil
 	if p := schema.Properties["vm"]; p != nil {
 		if spec.name == "vm_end_turn" {
 			p.Description = "VM name from vm_list. Omit only to end the whole task (this task's own waits, temporary checkpoints and ownership on every VM); required with all_temp."
@@ -163,16 +164,19 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 			}
 			_ = json.Unmarshal(req.Params.Arguments, &args)
 		}
-		// Before anything else: a missing vm is refused with the VM names, not a generic schema error, and nothing runs.
-		if err := vmRequired(d, spec.name, req.Params.Arguments, args.VM); err != nil {
-			return errorResult("", err), nil
-		}
 		task, err := d.resolveTask(req, identity.TaskID, spec.name == "vm_end_turn")
 		if err != nil {
 			return errorResult("", err), nil
 		}
 		if task != nil {
 			ctx = context.WithValue(ctx, taskContextKey{}, task)
+		}
+		// Before any VM is touched: a missing vm is refused with the VM names rather than a generic schema error.
+		// Only for tools whose input has a vm field; a vm of the wrong type is left to the schema error below.
+		if hasVM {
+			if err := vmRequired(d, spec.name, req.Params.Arguments, args.VM); err != nil {
+				return taskResult(errorResult(d.taskRunID(ctx), err), task), nil
+			}
 		}
 		if inputErr != nil {
 			return taskResult(errorResult(d.taskRunID(ctx), invalidToolArguments(spec.name, inputErr)), task), nil
@@ -275,6 +279,15 @@ func decodeToolArguments(raw json.RawMessage, schema *jsonschema.Resolved, in an
 func vmRequired(d *deps, tool string, raw json.RawMessage, vm string) error {
 	if tool == "vm_list" || strings.TrimSpace(vm) != "" {
 		return nil
+	}
+	var present map[string]json.RawMessage
+	if len(raw) > 0 && json.Unmarshal(raw, &present) == nil {
+		if v, ok := present["vm"]; ok {
+			var str string
+			if json.Unmarshal(v, &str) != nil && string(v) != "null" {
+				return nil // not a string: the schema validation reports the type error
+			}
+		}
 	}
 	if tool == "vm_end_turn" {
 		var in struct {
