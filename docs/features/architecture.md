@@ -29,7 +29,7 @@ HyperHand consists of two Windows executables.
 - A queued call can be cancelled or reach its context deadline without waiting for the active request to finish. It is not sent and does not interrupt the active request.
 - Before reusing an idle connection the client probes it with a 1 ms read. A timeout means the connection is alive; EOF, any other error, or unexpected data marks it dead, and the client redials.
 - If a request could not be sent, the client reconnects and sends it once more. The resend happens only if the request payload can be rewound (no payload, or a seekable source). A request that was sent is never resent, so a command cannot run twice.
-- The client for a VM is closed and discarded after `vm_start`, `vm_shutdown`, `vm_turn_off` and `vm_restore` (see 3).
+- The client for a VM is closed and discarded after `vm_start`, `vm_shutdown`, `vm_turn_off`, `vm_save`, `vm_pause` and `vm_restore` (see 3).
 
 ### 1.4 Cancellation
 

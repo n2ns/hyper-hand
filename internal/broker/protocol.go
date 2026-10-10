@@ -54,8 +54,10 @@ func operationTimeout(op string) time.Duration {
 	switch op {
 	case "copy", "checkpoint_create", "checkpoint_restore", "checkpoint_delete", "checkpoint_rename":
 		return 15 * time.Minute
-	case "start", "stop", "checkpoints":
+	case "start", "stop", "pause", "checkpoints":
 		return time.Minute
+	case "save":
+		return 6 * time.Minute
 	case "screenshot", "click", "drag", "scroll", "keys", "text":
 		return 30 * time.Second
 	default:
@@ -124,7 +126,7 @@ func validateRequest(r request, size int64) error {
 		return errors.New("unexpected broker payload")
 	}
 	switch r.Op {
-	case "list", "find", "start", "stop", "shutdown", "checkpoints", "checkpoint_create", "checkpoint_restore", "checkpoint_delete", "checkpoint_rename", "screenshot", "keys", "text", "dial":
+	case "list", "find", "start", "stop", "save", "pause", "shutdown", "checkpoints", "checkpoint_create", "checkpoint_restore", "checkpoint_delete", "checkpoint_rename", "screenshot", "keys", "text", "dial":
 	case "click":
 		if r.Button < 1 || r.Button > 3 {
 			return errors.New("invalid mouse button")

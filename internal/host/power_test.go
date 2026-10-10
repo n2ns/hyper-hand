@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"hyperhand/internal/hyperv"
+	"hyperhand/internal/proto"
 )
 
 func TestWaitOff(t *testing.T) {
@@ -36,6 +38,45 @@ func TestWaitOff(t *testing.T) {
 	}
 }
 
+// resumeBackend is one VM in state with an answering agent; Start resumes it to Running.
+type resumeBackend struct {
+	*fakeAgentBackend
+	started []string
+}
+
+func (b *resumeBackend) Start(name string) error {
+	b.started = append(b.started, name)
+	b.vms[0].State = "Running"
+	return nil
+}
+
+// vm_start resumes a saved or paused VM like an off one, waits for the agent and reports the state it found.
+func TestStartResumesSavedAndPaused(t *testing.T) {
+	for _, state := range []string{"Saved", "Paused", "Running"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		b := &resumeBackend{fakeAgentBackend: newFakeAgentBackend(func(req proto.Request) (any, error) {
+			switch req.Op {
+			case proto.OpPing:
+				return proto.PingResult{Version: "test", Protocol: proto.Protocol}, nil
+			case proto.OpSessionState:
+				return proto.SessionStateResult{Console: true}, nil
+			}
+			return nil, errors.New("unexpected op " + req.Op)
+		})}
+		b.vms[0].State = state
+		cs, _ := connectTools(t, ctx, b)
+		var out startOut
+		callJSON(t, ctx, cs, "vm_start", map[string]any{"vm": "Win10"}, &out)
+		if out.PreviousState != strings.ToLower(state) || out.State != "running" || out.Desktop != "usable" || out.Agent.Protocol != proto.Protocol {
+			t.Errorf("from %s: %+v", state, out)
+		}
+		if wantStart := state != "Running"; (len(b.started) == 1) != wantStart {
+			t.Errorf("from %s: started %v", state, b.started)
+		}
+		cancel()
+	}
+}
+
 type powerBackend struct {
 	Backend // unexpected operations fail rather than reaching the real machine
 	calls   []string
@@ -48,6 +89,16 @@ func (b *powerBackend) Find(name string) (hyperv.VM, error) {
 func (b *powerBackend) Shutdown(name string) error {
 	b.calls = append(b.calls, "shutdown:"+name)
 	b.state = "Off" // the guest shut down at once
+	return nil
+}
+func (b *powerBackend) Save(name string) error {
+	b.calls = append(b.calls, "save:"+name)
+	b.state = "Saved"
+	return nil
+}
+func (b *powerBackend) Pause(name string) error {
+	b.calls = append(b.calls, "pause:"+name)
+	b.state = "Paused"
 	return nil
 }
 func (b *powerBackend) Stop(name string) error {
@@ -92,6 +143,43 @@ func TestPowerTools(t *testing.T) {
 		}
 		if !reflect.DeepEqual(b.calls, c.want) {
 			t.Errorf("%s from %s: calls %v, want %v", c.tool, c.state, b.calls, c.want)
+		}
+	}
+	// vm_save and vm_pause: a request only when the VM is not already there; impossible transitions are refused
+	// before anything is requested.
+	for _, c := range []struct {
+		tool, state string
+		want        []string
+		refused     bool
+	}{
+		{"vm_save", "Running", []string{"save:Win10"}, false},
+		{"vm_save", "Paused", []string{"save:Win10"}, false},
+		{"vm_save", "Saved", nil, false},
+		{"vm_save", "Off", nil, true},
+		{"vm_pause", "Running", []string{"pause:Win10"}, false},
+		{"vm_pause", "Paused", nil, false},
+		{"vm_pause", "Saved", nil, true},
+		{"vm_pause", "Off", nil, true},
+	} {
+		b := &powerBackend{state: c.state}
+		cs := connect(b)
+		r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: c.tool, Arguments: map[string]any{"vm": "Win10"}})
+		cs.Close()
+		if err != nil || r.IsError != c.refused {
+			t.Fatalf("%s from %s: %v %s", c.tool, c.state, err, resultText(r))
+		}
+		if !reflect.DeepEqual(b.calls, c.want) {
+			t.Errorf("%s from %s: calls %v, want %v", c.tool, c.state, b.calls, c.want)
+		}
+		want := map[string]string{"vm_save": `"state":"saved"`, "vm_pause": `"state":"paused"`}[c.tool]
+		if c.refused {
+			want = `"state":"` + strings.ToLower(c.state) + `"`
+			if !strings.Contains(resultText(r), `"error":"failed"`) || !strings.Contains(resultText(r), "vm_start") {
+				t.Errorf("%s from %s: %s", c.tool, c.state, resultText(r))
+			}
+		}
+		if !strings.Contains(resultText(r), want) {
+			t.Errorf("%s from %s: %s, want %s", c.tool, c.state, resultText(r), want)
 		}
 	}
 	cs := connect(&powerBackend{state: "Running"})

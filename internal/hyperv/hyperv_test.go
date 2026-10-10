@@ -87,10 +87,11 @@ func TestWaitStateJobPendingDeadline(t *testing.T) {
 }
 
 func TestStateName(t *testing.T) {
-	// Msvm_ComputerSystem.EnabledState uses Hyper-V-specific values for saved/paused VMs.
+	// Msvm_ComputerSystem.EnabledState: 6 (Enabled but Offline) and 9 (Quiesce) are what a saved and a paused VM
+	// report (observed on Windows 11 Hyper-V); 32769 and 32768 are the older Hyper-V-specific values.
 	for state, want := range map[int]string{
-		2: "Running", 3: "Off", 32769: "Saved", 32768: "Paused",
-		0: "0", 6: "6", 9: "9", 32770: "32770",
+		2: "Running", 3: "Off", 6: "Saved", 9: "Paused", 32769: "Saved", 32768: "Paused",
+		0: "0", 32770: "32770",
 	} {
 		if got := stateName(state); got != want {
 			t.Errorf("stateName(%d) = %q, want %q", state, got, want)

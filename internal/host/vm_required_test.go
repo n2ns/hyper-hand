@@ -124,6 +124,14 @@ func (b *twoVMBackend) Stop(name string) error {
 	b.record("Stop", name)
 	return b.setState(name, "Off")
 }
+func (b *twoVMBackend) Save(name string) error {
+	b.record("Save", name)
+	return b.setState(name, "Saved")
+}
+func (b *twoVMBackend) Pause(name string) error {
+	b.record("Pause", name)
+	return b.setState(name, "Paused")
+}
 func (b *twoVMBackend) Shutdown(name string) error {
 	b.record("Shutdown", name)
 	return b.setState(name, "Off")

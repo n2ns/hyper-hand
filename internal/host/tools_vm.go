@@ -136,6 +136,8 @@ type startOut struct {
 	Desktop  string    `json:"desktop"`
 	Agent    agentInfo `json:"agent"`
 	Unlocked bool      `json:"unlocked"` // the session was locked and vm_start unlocked it
+	// PreviousState is the power state vm_start found: running, off, saved (resumed from disk) or paused (resumed).
+	PreviousState string `json:"previous_state"`
 }
 
 // checkpointsOut is vm_checkpoints' result: the VM's checkpoint setting (what vm_checkpoint will create), the id of
@@ -204,6 +206,27 @@ func agentErr(err error) error {
 	return asToolError(err)
 }
 
+// suspend implements vm_save and vm_pause: it requests target ("Saved" or "Paused") with request unless the VM is
+// already there, and closes the VM's agent client, whose connection does not survive. Hyper-V saves a running or
+// paused VM and pauses only a running one; other states are refused before anything is requested.
+func (d *deps) suspend(vm, target string, request func(string) error) (*mcp.CallToolResult, error) {
+	v, err := d.raw.Find(vm)
+	if err != nil {
+		return nil, vmErr(err)
+	}
+	if v.State != target {
+		if v.State != "Running" && !(target == "Saved" && v.State == "Paused") {
+			return nil, refuse(codeFailed, "call vm_start first if the VM should run, then retry", map[string]any{"vm": v.Name, "state": powerState(v.State)}, "VM %s is %s and cannot be %s", v.Name, powerState(v.State), powerState(target))
+		}
+		err = request(v.Name)
+		d.m.Drop(v.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return jsonResult(vmState{VM: v.Name, State: powerState(target)})
+}
+
 // registerVM registers the VM, checkpoint (with registerCheckpoint), command, file, clipboard, wait and agent tools.
 func registerVM(d *deps) {
 	m, backend, input, call, u := d.m, d.backend, d.input, d.call, d.u
@@ -217,7 +240,7 @@ func registerVM(d *deps) {
 		}
 		return jsonResult(map[string]any{"vms": vms, "run_id": d.taskRunID(ctx)})
 	})
-	addToolIn(d, toolSpec{name: "vm_start", desc: "Start a VM (if it is not running) and wait until its desktop is usable: the guest agent answers with the current protocol and the session is unlocked (the unlock password stored in the HyperHand tray is typed if the session is locked). A refusal says why the desktop is not usable; the VM keeps running.", idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
+	addToolIn(d, toolSpec{name: "vm_start", desc: "Start a VM (if it is not running; a saved or paused VM is resumed, previous_state says which) and wait until its desktop is usable: the guest agent answers with the current protocol and the session is unlocked (the unlock password stored in the HyperHand tray is typed if the session is locked). A refusal says why the desktop is not usable; the VM keeps running.", idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM)
 		if err != nil {
 			return nil, vmErr(err)
@@ -238,7 +261,7 @@ func registerVM(d *deps) {
 			te.Reason = fmt.Sprintf("VM %s is running, but its desktop is not usable: %s", v.Name, te.Reason)
 			return nil, te
 		}
-		return jsonResult(startOut{VM: v.Name, State: "running", Desktop: "usable", Agent: agentOf(r.Agent), Unlocked: r.Unlocked})
+		return jsonResult(startOut{VM: v.Name, State: "running", Desktop: "usable", Agent: agentOf(r.Agent), Unlocked: r.Unlocked, PreviousState: powerState(v.State)})
 	})
 	addToolIn(d, toolSpec{name: "vm_status", desc: "Report a VM's power state, whether an unlock password is stored, which task holds its write ownership (owner: {task_id, idle_ms, in_flight, this_task}, null when free; in_flight counts this call when this_task) and, when it runs, the guest agent (state ok, busy or not_answering; version, protocol, user) and its session (locked, console, uac_prompt). Does not wait or change anything.", readOnly: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM)
@@ -328,6 +351,12 @@ func registerVM(d *deps) {
 			return nil, err
 		}
 		return jsonResult(vmState{VM: v.Name, State: "off"})
+	})
+	addToolIn(d, toolSpec{name: "vm_save", desc: "Save a running or paused VM: Hyper-V writes its memory and device state to disk and stops it (state saved), like hibernating without the guest's help; programs and unsaved work survive. Takes as long as writing the memory (up to 5 minutes). Resume it with vm_start, which waits until the desktop is usable. A saved VM stays saved; an off VM cannot be saved.", destructive: false, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
+		return d.suspend(in.VM, "Saved", backend.Save)
+	})
+	addToolIn(d, toolSpec{name: "vm_pause", desc: "Pause a running VM: Hyper-V freezes it in memory at once (state paused); nothing runs in the guest and its agent does not answer until it is resumed. Resume it with vm_start, which waits until the desktop is usable. A paused VM stays paused; an off or saved VM cannot be paused.", destructive: false, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
+		return d.suspend(in.VM, "Paused", backend.Pause)
 	})
 	addToolIn(d, toolSpec{name: "vm_checkpoints", desc: "List the VM's checkpoint tree in creation order (parents before children). Each entry has id (the stable selector for vm_restore, vm_checkpoint_delete and vm_checkpoint_keep; names may repeat), name, parent (id or null for a root), created_at, type, run_id and label (null for manual), kind (standard: may hold memory and resume running; production: application-consistent, restores to off), state (the power state it saved: running, off or saved), current (the VM's current state branches from it; also current_parent) and children (direct children; deleting a checkpoint re-parents them). Types: temp (<run_id>-temp-<label>, a rollback point vm_end_turn deletes), keep (<run_id>-keep-<label>, a baseline kept across runs), manual (any other name, made outside HyperHand; delete by id only). checkpoint_type is the VM's Hyper-V setting (Standard, Production, ProductionOnly, Disabled) that decides what vm_checkpoint creates.", readOnly: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM)

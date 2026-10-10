@@ -6,7 +6,7 @@ The exact behavior is split by chapter, one file each. Read the chapter of the t
 
 - [1. Architecture](features/architecture.md): 1.1 Host side, 1.2 Hyper-V socket, 1.3 Connections and request ordering, 1.4 Cancellation, 1.5 Agent service loop, 1.6 Task ownership
 - [2. Results, Errors and VM Selection](features/results-errors.md): 2.1 Result format, 2.2 Error object and codes, 2.3 VM selection
-- [3. VM and Checkpoint Tools](features/vm-checkpoints.md): 3.1 vm_list, 3.2 vm_start, vm_shutdown and vm_turn_off, 3.3 Checkpoints, 3.4 PowerShell-based operations, 3.5 Session readiness and unlock: vm_start, vm_status, vm_unlock
+- [3. VM and Checkpoint Tools](features/vm-checkpoints.md): 3.1 vm_list, 3.2 vm_start, vm_shutdown, vm_turn_off, vm_save and vm_pause, 3.3 Checkpoints, 3.4 PowerShell-based operations, 3.5 Session readiness and unlock: vm_start, vm_status, vm_unlock
 - [4. Observation and Input](features/observation-input.md): 4.1 Observations, 4.2 vm_windows, 4.3 vm_observe, 4.4 Actions: targets, check chain, activation and observe_after, 4.5 Input serialisation, 4.6 Mouse: vm_click, vm_drag, vm_scroll, 4.7 Control actions: vm_set_value, vm_invoke, 4.8 Keyboard: vm_key, 4.9 Text: vm_type
 - [5. Commands](features/commands.md): 5.1 vm_exec, 5.2 Shells, 5.3 Working directory, 5.4 Timeout, 5.5 Elevated execution (admin), 5.6 Output decoding, 5.7 Background jobs: vm_exec background, vm_job
 - [6. Files](features/files.md): 6.1 vm_push, 6.2 Unchanged-file skipping, 6.3 vm_pull, 6.4 Temporary .hhpart files, 6.5 Directory mirror, 6.6 vm_file_info
@@ -23,6 +23,7 @@ Every tool except `vm_list` requires `vm`; see 2.3.
 |---|---|
 | `vm_list`, `vm_start` | List VMs with their state and the task's `run_id`; start and wait until the desktop is usable (unlocking it with the stored password) |
 | `vm_shutdown`, `vm_turn_off` | Shut the guest down normally and wait until the VM is off (fails, without turning it off, if a program blocks shutdown); turn the VM off immediately, like pulling the plug |
+| `vm_save`, `vm_pause` | Save the VM's memory to disk and stop it (saved), or freeze it in memory (paused); programs and unsaved work survive, and `vm_start` resumes it and waits until the desktop is usable |
 | `vm_status`, `vm_unlock`, `vm_doctor` | Report power state, agent, session lock state and whether an unlock password is stored; unlock a locked session with the stored password; run read-only host and guest checks with a suggestion per problem |
 | `vm_checkpoints`, `vm_checkpoint` | List the checkpoint tree (`id`, `name`, `parent`, `type`, `kind`, `state`, `current`, `children`, plus the VM's `checkpoint_type` and `current_parent`); create one named `<run_id>-temp-<label>` (or `-keep-` with `keep: true`) and return its `id` |
 | `vm_restore` | Restore a checkpoint by `id` (or by `name` when it is unique) and start the VM unless `start` is false; `save_current: true` first saves the current state as a `temp` checkpoint |

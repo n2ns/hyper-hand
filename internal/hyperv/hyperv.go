@@ -298,6 +298,16 @@ func Start(vm string) error { return requestState(vm, 2) }
 
 func Stop(vm string) error { return requestState(vm, 3) }
 
+// Save saves the VM's memory and device state to disk and stops it (RequestStateChange 6, Saved). Writing the memory
+// takes time in proportion to it, so the job is awaited longer than other state changes.
+func Save(vm string) error { return requestStateTimeout(vm, 6, saveTimeout) }
+
+// Pause freezes the VM in memory (RequestStateChange 9, Paused).
+func Pause(vm string) error { return requestState(vm, 9) }
+
+// saveTimeout bounds the wait for a save job.
+const saveTimeout = 5 * time.Minute
+
 // Shutdown asks the guest to shut down through the Hyper-V shutdown integration service and returns once the request
 // is accepted, not when the VM is off. It is not forced: a program with unsaved work can keep Windows from shutting
 // down. https://learn.microsoft.com/en-us/windows/win32/hyperv_v2/initiateshutdown-msvm-shutdowncomponent
@@ -340,6 +350,10 @@ func vmScript(vm, script string) ([]byte, error) {
 }
 
 func requestState(vm string, state int32) error {
+	return requestStateTimeout(vm, state, 45*time.Second)
+}
+
+func requestStateTimeout(vm string, state int32, timeout time.Duration) error {
 	return withWMI(func(s *session) error {
 		o, err := s.find(vm)
 		if err != nil {
@@ -349,7 +363,7 @@ func requestState(vm string, state int32) error {
 		if err != nil {
 			return err
 		}
-		return s.awaitJob(out, "RequestStateChange", 45*time.Second)
+		return s.awaitJob(out, "RequestStateChange", timeout)
 	})
 }
 
@@ -663,9 +677,9 @@ func stateName(st int) string {
 		return "Running"
 	case 3:
 		return "Off"
-	case 32769:
+	case 6, 32769: // Enabled but Offline; the older Suspended value
 		return "Saved"
-	case 32768:
+	case 9, 32768: // Quiesce; the older Paused value
 		return "Paused"
 	}
 	return strconv.Itoa(st)

@@ -14,6 +14,8 @@ type Backend interface {
 	Find(string) (hyperv.VM, error)
 	Start(string) error
 	Stop(string) error
+	Save(string) error  // to the Saved state (memory on disk)
+	Pause(string) error // to the Paused state (frozen in memory)
 	Shutdown(string) error
 	ListCheckpoints(vm string) (hyperv.CheckpointList, error)
 	CreateCheckpoint(vm, name string) (hyperv.Checkpoint, error)

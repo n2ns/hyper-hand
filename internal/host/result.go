@@ -240,7 +240,7 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 						return taskResult(errorResult(task.runID, err), task), nil
 					}
 					switch spec.name {
-					case "vm_start", "vm_shutdown", "vm_turn_off", "vm_restore", "vm_unlock", "vm_install_agent", "vm_update_agent":
+					case "vm_start", "vm_shutdown", "vm_turn_off", "vm_save", "vm_pause", "vm_restore", "vm_unlock", "vm_install_agent", "vm_update_agent":
 						defer d.beginExternalMutation(ctx, vm, true)()
 					case "vm_exec", "vm_launch":
 						defer d.beginExternalMutation(ctx, vm, false)()

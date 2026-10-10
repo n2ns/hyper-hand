@@ -62,7 +62,7 @@ class _SessionGone(TransportError):
 
 # Minimum HTTP timeouts (seconds) of tools that can take minutes besides their timeout_ms / wait_ms.
 _SLOW = {"vm_end_turn": 1800, "vm_checkpoint_delete": 1800, "vm_checkpoint": 600, "vm_restore": 600, "vm_start": 300,
-         "vm_shutdown": 300, "vm_turn_off": 120, "vm_install_agent": 300, "vm_update_agent": 180, "vm_push": 3600,
+         "vm_shutdown": 300, "vm_turn_off": 120, "vm_save": 420, "vm_pause": 120, "vm_install_agent": 300, "vm_update_agent": 180, "vm_push": 3600,
          "vm_pull": 3600}
 
 

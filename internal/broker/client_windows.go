@@ -117,6 +117,8 @@ func (Client) Find(vm string) (hyperv.VM, error) {
 }
 func (Client) Start(vm string) error { return call(request{Op: "start", VM: vm}) }
 func (Client) Stop(vm string) error  { return call(request{Op: "stop", VM: vm}) }
+func (Client) Save(vm string) error  { return call(request{Op: "save", VM: vm}) }
+func (Client) Pause(vm string) error { return call(request{Op: "pause", VM: vm}) }
 func (Client) Shutdown(vm string) error {
 	return call(request{Op: "shutdown", VM: vm})
 }
