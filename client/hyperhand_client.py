@@ -66,10 +66,11 @@ _SLOW = {"vm_end_turn": 1800, "vm_checkpoint_delete": 1800, "vm_checkpoint": 600
          "vm_pull": 3600}
 
 
-def new_task_id(purpose="task"):
-    """A fresh task ID such as task-deploy-3f2a9c01; pass the same one on every call of one piece of work."""
-    purpose = re.sub(r"[^A-Za-z0-9_.-]+", "-", purpose).strip("-") or "task"
-    return f"task-{purpose}-{uuid.uuid4().hex[:8]}"
+def new_task_id(purpose=""):
+    """A fresh task ID such as task-deploy-3f2a9c01 (task-3f2a9c01 without purpose); pass the same one on every call
+    of one piece of work."""
+    purpose = re.sub(r"[^A-Za-z0-9_.-]+", "-", purpose).strip("-")
+    return f"task-{purpose}-{uuid.uuid4().hex[:8]}" if purpose else f"task-{uuid.uuid4().hex[:8]}"
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -426,7 +427,7 @@ def main(argv=None):
     ns = p.parse_args(argv)
 
     if ns.tool == "new-task":
-        print(new_task_id(ns.args[0] if ns.args else "task"))
+        print(new_task_id(ns.args[0] if ns.args else ""))
         return 0
     try:
         args = _parse_args(ns.args)
