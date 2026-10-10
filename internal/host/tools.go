@@ -131,6 +131,7 @@ func NewServer(m *Manager) *mcp.Server {
 	registerLaunch(d)
 	registerApps(d)
 	registerTurn(d)
+	registerJobs(d)
 	registerDoctor(d)
 	return s
 }

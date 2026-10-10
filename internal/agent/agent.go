@@ -21,6 +21,10 @@ type Handler func(ctx context.Context, args json.RawMessage, payload []byte) (re
 var handlers = map[string]Handler{
 	proto.OpPing:               ping,
 	proto.OpExec:               execOp,
+	proto.OpJobStart:           jobStart,
+	proto.OpJobRead:            jobRead,
+	proto.OpJobCancel:          jobCancel,
+	proto.OpJobList:            jobList,
 	proto.OpReadFile:           readFile,
 	proto.OpListDir:            listDir,
 	proto.OpHashFiles:          hashFiles,

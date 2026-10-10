@@ -96,7 +96,8 @@ Every tool except `vm_list` requires `vm` (the VM name from `vm_list`); there is
 | `vm_type`, `vm_key` | Type Unicode text into a window (`handle`/`pid`, or an observation `index` to focus first) as key events, never through the clipboard; press one key combination or a `sequence` (numeric keypad and X11-style names included) |
 | `vm_apps` | Find launchable desktop applications by name or executable path; return stable IDs, `launch` arguments for `vm_launch`, running state and visible window handles |
 | `vm_launch` | Start a program detached and return its `pid` and first window's `handle`, `title` and `class` |
-| `vm_exec` | Run a command to completion in the guest; `shell`, `cwd`, `timeout_ms`, `admin` |
+| `vm_exec` | Run a command to completion in the guest; `shell`, `cwd`, `timeout_ms`, `admin`; `background: true` starts it as a job and returns its `id` at once |
+| `vm_job` | Read a background job's state and output incrementally (`stdout_offset`/`stderr_offset`, `wait_ms`), cancel its process tree, or list the agent's jobs; jobs survive reconnects and host restarts |
 | `vm_push`, `vm_pull` | Copy files or directories host to guest and back; `vm_push` skips unchanged files unless `force` is true. `mode: mirror` synchronizes exact directory contents with `phase: plan` then `phase: apply` and the returned `plan_id` |
 | `vm_clipboard_get`, `vm_clipboard_set` | Read or write the guest clipboard |
 | `vm_wait` | Wait for a process, file or UI condition; check or assert window/control state |

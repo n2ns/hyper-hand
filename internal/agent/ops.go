@@ -49,24 +49,10 @@ func execCommand(ctx context.Context, a proto.ExecArgs, script string) (any, []b
 		}
 		return nil, nil, err
 	}
-	var cmd *exec.Cmd
-	attr := &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
-	switch a.Shell {
-	case "", "powershell":
-		if script != "" {
-			cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script)
-		} else {
-			cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-				"-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"+a.Command)
-		}
-	case "cmd":
-		cmd = exec.Command("cmd.exe")
-		attr.CmdLine = `cmd.exe /d /s /c "` + a.Command + `"`
-	default:
-		return nil, nil, fmt.Errorf("unknown shell %q", a.Shell)
+	cmd, err := shellCommand(a, script)
+	if err != nil {
+		return nil, nil, err
 	}
-	cmd.SysProcAttr = attr
-	cmd.Dir = a.Cwd
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	cmd.WaitDelay = 5 * time.Second
@@ -115,6 +101,29 @@ func execCommand(ctx context.Context, a proto.ExecArgs, script string) (any, []b
 	r.ExitCode = cmd.ProcessState.ExitCode()
 	r.Stdout, r.Stderr = toUTF8(stdout.Bytes()), toUTF8(stderr.Bytes())
 	return r, nil, nil
+}
+
+// shellCommand builds the hidden shell process for a's command (or, for powershell, the script file).
+func shellCommand(a proto.ExecArgs, script string) (*exec.Cmd, error) {
+	var cmd *exec.Cmd
+	attr := &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+	switch a.Shell {
+	case "", "powershell":
+		if script != "" {
+			cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script)
+		} else {
+			cmd = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+				"-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8;"+a.Command)
+		}
+	case "cmd":
+		cmd = exec.Command("cmd.exe")
+		attr.CmdLine = `cmd.exe /d /s /c "` + a.Command + `"`
+	default:
+		return nil, fmt.Errorf("unknown shell %q", a.Shell)
+	}
+	cmd.SysProcAttr = attr
+	cmd.Dir = a.Cwd
+	return cmd, nil
 }
 
 // toUTF8 keeps valid UTF-8 as is and otherwise decodes from the OEM code page (cmd's output).

@@ -82,6 +82,7 @@ Every refusal and failure is returned as an MCP result with `isError: true` whos
 | `task_required` | The transport has no persistent MCP session and `task_id` was omitted |
 | `task_ended` | An explicit task ID was already ended; choose a new ID |
 | `task_busy` | Cleanup is running for this task; wait for it to finish |
+| `no_job` | `vm_job`: the agent has no job with that ID (never existed, dropped after 24 hours or beyond 32 jobs, or the agent restarted) |
 | `vm_busy` | Another task owns writes to this VM; its `vm_end_turn` must release ownership. Fields `vm`, `owner_task_id`, `owner_idle_ms`, `owner_in_flight` |
 | `stale_observation` | The observation is unknown, evicted or belongs to another task/VM; its window identity or geometry changed; a HyperHand lifecycle operation invalidated it; or its coordinates fail revision or local screenshot checks (see 4.1) |
 | `stale_element` | `index` is not in the observation's tree, or the control's runtime ID no longer resolves in the window when the host re-locates it before acting |
@@ -464,7 +465,7 @@ See Microsoft's [SendInput restrictions](https://learn.microsoft.com/en-us/windo
 {"exit_code": 0, "stdout": "WIN10\r\n", "stderr": "", "timed_out": false}
 ```
 
-A non-zero exit code is not a tool error. An empty `command` or an unknown `shell` is `invalid_argument`; an agent that does not answer is `agent_required`; errors from the agent (start failure, cancellation) are `failed`. `vm_exec` is not for starting GUI programs, whose process would belong to the request: use `vm_launch` (see 7.2).
+A non-zero exit code is not a tool error. An empty `command` or an unknown `shell` is `invalid_argument`; an agent that does not answer is `agent_required`; errors from the agent (start failure, cancellation) are `failed`. `vm_exec` is not for starting GUI programs, whose process would belong to the request: use `vm_launch` (see 7.2). For commands that run longer than a call should wait, use `background: true` (see 5.7).
 
 ### 5.2 Shells
 
@@ -501,6 +502,19 @@ stdout and stderr are decoded independently.
 - A leading UTF-8 BOM is removed.
 - Valid UTF-8 is kept as is.
 - Otherwise the bytes are decoded from the guest's OEM code page (the default for `cmd` output).
+
+### 5.7 Background jobs: vm_exec background, vm_job
+
+`vm_exec` with `background: true` starts the command as a job in the guest agent and returns at once; `vm_job` reads, waits for and cancels it. Jobs are meant for commands that run minutes (test runs, capability checks): the call does not hold the agent connection, so other tools on the VM keep working, and the result can be collected after the MCP connection, the task or the host itself was restarted.
+
+- Start: `vm_exec {vm, command, shell, cwd, timeout_ms, background: true}` returns `{"vm": "Win10", "id": "job-3f2a9c01b7de", "pid": 4120, "command": "...", "shell": "powershell", "cwd": "C:\\", "state": "running", "exit_code": null, "started_at": "2026-10-10T21:00:00+07:00", "ended_at": "", "elapsed_ms": 0, "timeout_ms": 3600000, "stdout_bytes": 0, "stderr_bytes": 0, "stdout_dropped": 0, "stderr_dropped": 0}`. The command runs as the agent's user, with the same shells (5.2), working directory (5.3), Job Object and output decoding (5.6) as `vm_exec`. `timeout_ms` defaults to 3600000 (1 hour) and may be at most 86400000 (24 hours); when it passes, the job's whole process tree is terminated and the state is `timed_out`. `admin: true` together with `background` is `invalid_argument` (elevated jobs are not supported; run them with `vm_exec admin: true`). Starting a job is a write: it takes the VM's write ownership (1.6).
+- Read: `vm_job {vm, job_id, stdout_offset, stderr_offset, max_bytes, wait_ms}` returns the job's fields as above plus `stdout` and `stderr`: the output from the given byte offsets (default 0), at most `max_bytes` per stream (default 65536, at most 1048576), and `stdout_next` / `stderr_next`, the offsets to pass next. A chunk never ends inside a UTF-8 character that later bytes complete; a `max_bytes` smaller than one character still returns that whole character, so reads always advance once its bytes are there (or the job has ended). Output that is not UTF-8 (the OEM code page, possibly double-byte) is cut after its last line break while the job may still write. `complete` is `true` when the job is no longer running and both streams were read to their end. `wait_ms` (0 to 60000, default 0) makes the host poll the agent every 500 ms until the job ends or new output can be returned; `waited_ms` says how long it waited. `vm_end_turn` of the same task cancels such a wait like a `vm_wait`, and the call then returns the last read (or the cancellation error when it came during the first read). Each poll is a short agent request, so other calls on the VM are not blocked. Reading needs no write ownership: any task can read any job by its ID.
+- States: `running`; `exited` (the shell exited by itself; `exit_code` is its code); `timed_out`; `cancelled` (`vm_job cancel`). `exit_code` is `null` only while running. A job is finished when its shell has exited (the agent waits at most 5 s for children to release the output pipes). A child that the shell started and left running is then no longer tracked: it keeps running, and neither `cancel` nor the timeout reaches it any more. Start long-lived children in a way that the shell waits for them (`Start-Process -Wait`).
+- Cancel: `vm_job {vm, job_id, cancel: true}` terminates the job's whole process tree (Job Object) and returns its final state once the shell has exited (at most 15 s), with `stdout`/`stderr` empty; read the remaining output afterwards with offsets. Cancelling a finished job returns its state unchanged. Cancel is a write and needs the VM's write ownership; `cancel` without `job_id` is `invalid_argument`.
+- List: `vm_job {vm}` returns `{"vm": "Win10", "jobs": [...]}`, every job the agent keeps, oldest first, without output.
+- Retention: the agent keeps at most 32 jobs; when a new one starts, jobs that ended more than 24 hours ago are dropped, then the oldest finished jobs while 32 are kept; with 32 jobs running, the start fails (`failed`, reason naming the limit). Each stream stores its first 16 MiB; everything after that limit is counted in `stdout_dropped` / `stderr_dropped` and discarded (a character cut at the limit is returned as its bytes).
+- Restarts: jobs live in the agent process. Host restarts, MCP reconnects and `vm_end_turn` do not affect them (ending a task neither cancels its jobs nor releases them to anyone; they keep running to their timeout). When the agent itself restarts (`vm_update_agent`, sign-out, reboot), its job list is lost but the jobs' processes are not stopped; reading such a job is `no_job` (`next`: list the agent's jobs).
+- Errors: an unknown `job_id` is `no_job`; an offset beyond the stored output, `wait_ms` or `max_bytes` out of range are `invalid_argument`. An agent older than protocol 3 is refused with `agent_outdated` (8.6).
 
 ## 6. Files
 
@@ -668,7 +682,7 @@ Because step 3 types blindly, a failure there is visible only on screen; the too
 
 `vm_install_agent` and `vm_update_agent` ping the agent every 2 s for up to 30 s, each ping limited to 5 s.
 
-- Success returns `{"agent": {"version": "0.3.0", "hostname": "WIN10", "user": "WIN10\\tester", "protocol": 2}}`. An agent that answers with an older protocol is refused with `agent_outdated` (see 8.6).
+- Success returns `{"agent": {"version": "0.3.0", "hostname": "WIN10", "user": "WIN10\\tester", "protocol": 3}}`. An agent that answers with an older protocol is refused with `agent_outdated` (see 8.6).
 - Otherwise the call is refused with `agent_required`, reason `the agent did not answer within 30 s: <last error>` and `next` `look at the screen with vm_observe, then call vm_install_agent again`.
 
 ### 8.5 vm_update_agent
@@ -684,7 +698,7 @@ The update replaces the file the agent is running from; the HKCU Run entry is un
 
 ### 8.6 Protocol version
 
-The guest protocol has a generation number, `protocol` 2 in this version, reported by the agent's `ping`. There is no compatibility path for older agents:
+The guest protocol has a generation number, `protocol` 3 in this version (3 added the background job ops), reported by the agent's `ping`. There is no compatibility path for older agents:
 
 - Every new connection to an agent is checked once: before the first op other than `ping` or `update_agent`, the host pings the agent and refuses an older `protocol` with `agent_outdated` (fields `agent_protocol`, `host_protocol`; `next` `call vm_update_agent`) for that op and every later one on the connection. `vm_status` (which only pings) and `vm_update_agent` therefore still work on an old agent, so that it can be reported and replaced; `vm_start`, `vm_install_agent` and `vm_update_agent` additionally check the protocol of the agent that answers their readiness ping.
 - An agent that answers `unknown op` to a request is reported as `agent_outdated` with the same `next`.
@@ -766,6 +780,10 @@ uint32 header length | uint64 payload length | header JSON | payload bytes
 |---|---|---|
 | `ping` | none | `{version, protocol, hostname, user}`; `protocol` is the generation the agent speaks (see 8.6) |
 | `exec` | `{command, shell, cwd, timeout_ms, admin}` | `{exit_code, stdout, stderr, timed_out}` |
+| `job_start` | `{command, shell, cwd, timeout_ms}` | `{id, pid, command, shell, cwd, state, exit_code, started_at, ended_at, elapsed_ms, timeout_ms, stdout_bytes, stderr_bytes, stdout_dropped, stderr_dropped}`; starts a background job (5.7); `admin` is refused |
+| `job_read` | `{id, stdout_offset, stderr_offset, max_bytes}` | the job's fields plus `{stdout, stderr, stdout_next, stderr_next}`; error `no such job "<id>": ...` for an unknown ID |
+| `job_cancel` | `{id}` | the job's fields after its shell exited; terminates its Job Object |
+| `job_list` | none | `{jobs: [...]}`, the job fields of every kept job |
 | `list_apps` | `{query, limit}` | `{apps: [{id, name, launch: {path, args, cwd}, running, windows: [{handle, pid, title}]}], total, truncated, warnings}` (see 7.5) |
 | `write_file` | `{path}` + payload (file contents) | none |
 | `read_file` | `{path}` | payload (file contents) |

@@ -21,7 +21,7 @@ var Version = "dev"
 
 // Protocol is the wire protocol generation. The host refuses an agent whose ping reports a lower Protocol with the
 // error code agent_outdated; there is no compatibility path for older agents.
-const Protocol = 2
+const Protocol = 3
 
 const (
 	OpPing         = "ping"          // -> PingResult

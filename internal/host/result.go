@@ -189,6 +189,12 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 			_ = json.Unmarshal(req.Params.Arguments, &p)
 			readOnly = p.Mode == "mirror" && (p.Phase == "" || p.Phase == "plan")
 		}
+		if spec.name == "vm_job" {
+			// Reading a job needs no ownership, so a reconnecting script with a new task can collect its result.
+			var j jobIn
+			_ = json.Unmarshal(req.Params.Arguments, &j)
+			readOnly = !j.Cancel
+		}
 		if task != nil {
 			if spec.name != "vm_end_turn" {
 				vm := args.VM
@@ -216,7 +222,8 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 					_ = json.Unmarshal(b, &in)
 				}
 				var done func()
-				ctx, done, err = task.enter(ctx, vm, spec.name == "vm_wait")
+				// vm_end_turn cancels waiting calls: vm_wait and vm_job (wait_ms) without cancel.
+				ctx, done, err = task.enter(ctx, vm, spec.name == "vm_wait" || spec.name == "vm_job" && readOnly)
 				if err != nil {
 					return taskResult(errorResult(task.runID, err), task), nil
 				}
