@@ -6,7 +6,7 @@ This document tracks remaining delivery work, unimplemented capabilities and acc
 
 ## 0. Execution plan (autonomous phases)
 
-A checklist an AI can run phase after phase without the user. Not started. Work the phases in order; each one ends with a commit and push, so an interrupted run resumes at the first unchecked phase.
+A checklist an AI can run phase after phase without the user. In progress. Work the phases in order; each one ends with a commit and push, so an interrupted run resumes at the first unchecked phase.
 
 Every phase follows the same steps:
 
@@ -18,7 +18,7 @@ Every phase follows the same steps:
 
 Stop conditions: a step that needs a user decision, a UAC prompt or work on the host desktop, or a failure that cannot be reproduced, is recorded under the phase as "Blocked: ..." and the run continues with the next phase. Never push a release tag.
 
-- [ ] **A. Housekeeping.** Correct stale statuses in this TODO (for example, `Win10-Example` agents have been updated). Keep the historical Go experiments under ignored `build/` out of package discovery so that `go test -race ./...` passes cleanly (section 4); preserve those artifacts.
+- [x] **A. Housekeeping.** Correct stale statuses in this TODO (for example, `Win10-Example` agents have been updated). Keep the historical Go experiments under ignored `build/` out of package discovery so that `go test -race ./...` passes cleanly (section 4); preserve those artifacts.
 - [ ] **B. Sequential batches with assertions** (section 2, P2). One tool call runs ordered tool steps with per-step results and optional assertions, stops at the first failure or failed assertion, reports the last completed step and never repeats a side-effecting step automatically. Contract, tests, Win10 acceptance with a real multi-step UI flow.
 - [ ] **C. Automatable acceptance gaps** (sections 1 and 3), on `Win10` only: mirror expired plans, old-agent upgrade errors, cancellation and mid-transfer disconnects with staging cleanup; guest uninstall and reinstall (independent recovery path); blocked graceful shutdown with an unsaved disposable document; long checkpoint merges at the timeout boundary; Production-only checkpoints; hung UI threads. Fix what fails (reproduce first).
 - [ ] **D. VM save and pause controls** (section 2, P2). Explicit Save and Pause operations and the resume readiness of the agent and desktop; Win10 acceptance of save, pause and resume.
@@ -78,7 +78,6 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 ## 4. Release and verification workflow
 
 - [ ] Publish a release containing the current AI-oriented tool surface, the new guest protocol generation, semantic actions, directory mirroring, UI waits/assertions, and control search/subtree observation. They remain under [Unreleased](CHANGELOG.md#unreleased). Include migration notes for removed tools/parameters and guest upgrade requirements; verify packaged and installed binary versions/hashes.
-- [ ] Keep historical local Go experiments out of the default package-discovery path so that `go test -race ./...` can run cleanly in this workspace. The existing ignored `build/acceptance-20261010-full` and `build/service-poc-20261006/service` contain incompatible old sources. Current maintained packages pass `go test -race ./cmd/... ./internal/...`; that is not a passing full `./...` result. Preserve unrelated artifacts when addressing the test layout.
 
 ## 5. Product scope decisions
 
@@ -91,9 +90,9 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 ## 6. Completed capabilities to keep out of the backlog
 
 - [x] Window groups, target integrity checks, structured tool results/errors, observation IDs and freshness checks.
-- [x] Typing into AutoCAD with its dynamic-input tooltip: the agent accepts a bare input popup of the target (no caption, sizing border or system menu; same process and UI thread; owner chain to the target) as the foreground while the target stays usable, so `vm_type "_qnew\n"` with the cursor in the drawing area runs the command; modal dialogs and floating palettes still stop input. Installed Win10 acceptance: see the [acceptance record](docs/dyninput-acceptance-20261010.md). `Win10-Example` still needs `vm_update_agent`.
+- [x] Typing into AutoCAD with its dynamic-input tooltip: the agent accepts a bare input popup of the target (no caption, sizing border or system menu; same process and UI thread; owner chain to the target) as the foreground while the target stays usable, so `vm_type "_qnew\n"` with the cursor in the drawing area runs the command; modal dialogs and floating palettes still stop input. Installed Win10 acceptance: see the [acceptance record](docs/dyninput-acceptance-20261010.md).
 - [x] Ownership of session-per-call clients: deleting an MCP session ends its default task once no call of it is in flight, releasing the VM (temp checkpoints kept); explicit task IDs keep ownership across sessions. `vm_busy` reports `owner_idle_ms` and `owner_in_flight` and names `vm_end_turn {task_id, vm}` for an abandoned explicit owner; `vm_status` reports `owner`. There is no idle takeover and no session timeout: a client that dies without deleting its session keeps its default task. Installed Win10 acceptance: see the [acceptance record](docs/tasks-jobs-client-acceptance-20261010.md).
-- [x] Asynchronous guest command jobs: `vm_exec background: true` and `vm_job` (state, incremental output by offsets, `wait_ms`, process-tree cancel, listing); jobs live in the agent and survive MCP reconnects, task ends and host restarts; retention 32 jobs / 24 hours / 16 MiB per stream; guest protocol 3. Installed Win10 acceptance: see the [acceptance record](docs/tasks-jobs-client-acceptance-20261010.md). Not run on the installed host: a host restart while a job runs. `Win10-Example` still needs `vm_update_agent`.
+- [x] Asynchronous guest command jobs: `vm_exec background: true` and `vm_job` (state, incremental output by offsets, `wait_ms`, process-tree cancel, listing); jobs live in the agent and survive MCP reconnects, task ends and host restarts; retention 32 jobs / 24 hours / 16 MiB per stream. Installed Win10 acceptance: see the [acceptance record](docs/tasks-jobs-client-acceptance-20261010.md). Not run on the installed host: a host restart while a job runs.
 - [x] Minimal official client: `client/hyperhand_client.py` (module and command; stable task ID, `key=value` arguments, UTF-8 JSON, errors as failures, saved images, control search). See [client/README.md](client/README.md).
 - [x] Required `vm` on every tool except `vm_list` (no default VM; `all_temp` needs `vm`), so a call meant for a VM that is off never reaches another one. Installed-host acceptance with `Win10` and `Win10-Example`: see the [acceptance record](docs/vm-required-acceptance-20261010.md).
 - [x] UIA semantic actions, state readback and four-direction semantic scrolling; custom-provider coverage remains bounded by the acceptance records.
@@ -102,6 +101,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 - [x] Checkpoint trees and stable IDs, keep/delete/subtree operations, `save_current` and temporary-checkpoint cleanup.
 - [x] Duplicate-name ambiguity for checkpoint restore, keep and delete; this was already verified in the 2026-10-10 acceptance.
 - [x] Desktop application discovery and `vm_doctor` diagnostics.
+- [x] Historical Go experiments under ignored `build/` stay out of package discovery: the tracked `build/go.mod` makes that directory a separate module, so `go vet ./...` and `go test -race ./...` pass in this workspace (2026-10-11); the artifacts were kept.
 - [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; additional interruption/upgrade coverage remains in section 1, and release remains in section 4.
 
 The old title selectors remain removed. UI waits use HWND/PID, exact control properties or observation-bound runtime identity; they do not restore the legacy title-based interface.

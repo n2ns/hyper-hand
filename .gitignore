@@ -1,3 +1,4 @@
-build/
+/build/*
+!/build/go.mod
 *.exe
 __pycache__/

@@ -25,7 +25,7 @@ go test -race ./cmd/... ./internal/...
 go run ./cmd/hyperhand dev-install    # builds this checkout and installs it on the host WITHOUT UAC, then checks the result
 ```
 
-- Test `./cmd/...` and `./internal/...`, not `./...`: the ignored `build\` directory holds old Go experiments that no longer compile.
+- `./...` works as well: the tracked `build\go.mod` makes the otherwise ignored `build\` directory a separate module, so its old Go experiments stay out of package discovery. Do not delete it.
 - The running service and tray use the installed copies under `%ProgramFiles%\HyperHand`; the files in `build\` are not the running version. Install a build only with `go run ./cmd/hyperhand dev-install` from the repository root (`--no-build` installs the files already in `build\dev-install`; exit code 0 means installed and checked): it goes through the preauthorized task `HyperHand Dev Install` and never prompts for UAC. Then update each guest agent with `vm_update_agent`.
 - Never run `hyperhand.exe install` without `--quiet` during development: it prompts for UAC. If `dev-install` reports that the task is not registered, ask the user to run `scripts\dev-install-setup.ps1` once from an elevated PowerShell; do not fall back to a UAC install.
 - Never kill processes by name (`taskkill /IM`, `Stop-Process -Name`); the installer owns service and tray replacement.

@@ -28,7 +28,7 @@ go test -race ./cmd/... ./internal/...
 python -m unittest discover -s client
 ```
 
-Test `./cmd/...` and `./internal/...` rather than `./...` in a working copy: the ignored `build\` directory may hold old Go experiments that no longer compile.
+`go test -race ./...` also works: `build\go.mod` makes the otherwise ignored `build\` directory a separate module, so the old Go experiments and evidence kept there stay out of package discovery. Keep that file.
 
 ## Install a development build
 
