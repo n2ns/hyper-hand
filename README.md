@@ -78,7 +78,7 @@ build\hyperhand.exe install
 
 ## Tools
 
-Every tool takes an optional `vm` (VM name). Without it, the only running VM is used; if none is running and exactly one exists, that one.
+Every tool except `vm_list` requires `vm` (the VM name from `vm_list`); there is no default VM. A call without it is refused with `invalid_argument` and the VM names in `next` and `vms`. Only `vm_end_turn` may omit it, to end the whole task (as the Stop hook examples do); `all_temp: true` requires it.
 
 | Tool | What it does |
 |---|---|
