@@ -133,8 +133,8 @@ func addToolIn[In any](d *deps, spec toolSpec, f func(context.Context, In) (*mcp
 	schema.Properties["task_id"] = &jsonschema.Schema{Type: "string", Description: "Unique AI task identifier. Reuse on every call when sharing a session or reconnecting; omit only for a dedicated persistent MCP session. vm_end_turn without vm ends this task; use a new ID afterwards."}
 	// vm is required everywhere but vm_list and vm_end_turn (see vmRequired): a default VM let a call land on another
 	// VM whenever the intended one was off.
-	hasVM := schema.Properties["vm"] != nil
-	if p := schema.Properties["vm"]; p != nil {
+	hasVM := schema.Properties["vm"] != nil && spec.name != "vm_list"
+	if p := schema.Properties["vm"]; p != nil && spec.name != "vm_list" {
 		if spec.name == "vm_end_turn" {
 			p.Description = "VM name from vm_list. Omit only to end the whole task (this task's own waits, temporary checkpoints and ownership on every VM); required with all_temp."
 		} else {
@@ -296,7 +296,8 @@ func vmRequired(d *deps, tool string, raw json.RawMessage, vm string) error {
 		if len(raw) > 0 {
 			_ = json.Unmarshal(raw, &in)
 		}
-		if !in.AllTemp {
+		// "" (or no vm) ends the whole task; a blank name is a mistake, not a request to end everything.
+		if !in.AllTemp && vm == "" {
 			return nil
 		}
 	}
@@ -306,7 +307,9 @@ func vmRequired(d *deps, tool string, raw json.RawMessage, vm string) error {
 		next = fmt.Sprintf("pass vm with one of: %s", strings.Join(names, ", "))
 	}
 	what := "vm is required: there is no default VM"
-	if tool == "vm_end_turn" {
+	if tool == "vm_end_turn" && vm != "" {
+		what = "vm must not be blank: omit it to end the whole task, or pass a VM name"
+	} else if tool == "vm_end_turn" {
 		what = "vm is required with all_temp: it would otherwise delete temporary checkpoints on every VM"
 	}
 	return refuse(codeInvalidArgument, next, map[string]any{"vms": names}, "%s", what)
