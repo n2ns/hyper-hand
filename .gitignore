@@ -2,3 +2,4 @@
 !/build/go.mod
 *.exe
 __pycache__/
+/temp/
