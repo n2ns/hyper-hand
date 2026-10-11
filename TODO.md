@@ -81,7 +81,6 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 
 ## 5. Product scope decisions
 
-- [ ] Decide MCP authentication and a pause/disable-control mechanism before wider distribution. The loopback MCP endpoint has no authentication; broker pipe ACLs and task IDs do not authenticate MCP callers.
 - [ ] Decide whether to support enhanced/RDP desktops. Current screenshots and input target the VM console, and targeted actions refuse an unusable session.
 - [ ] Decide whether unattended first sign-in belongs in scope. Current unlock support requires an already signed-in, locked session with the agent running.
 - [ ] Decide whether UWP/MSIX discovery and launch support is needed beyond current Win32 Start Menu/App Paths discovery.
