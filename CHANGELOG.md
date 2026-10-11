@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The guest agent's tray menu (`Host connected`, `Waiting for the host`, `Exit`) and the `uninstall` message box are in English instead of Chinese. Requires the updated guest agent (`vm_update_agent`).
+
 ## [0.3.0] - 2026-10-11
 
 **Breaking:** the MCP tool surface is redesigned for AI callers. Tool names, parameters and result formats change without aliases, and the guest protocol moves to a new generation: the host refuses older agents with `agent_outdated` until `vm_update_agent` is run.

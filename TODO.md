@@ -84,7 +84,6 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 - [ ] Decide whether to support enhanced/RDP desktops. Current screenshots and input target the VM console, and targeted actions refuse an unusable session.
 - [ ] Decide whether unattended first sign-in belongs in scope. Current unlock support requires an already signed-in, locked session with the agent running.
 - [ ] Decide whether UWP/MSIX discovery and launch support is needed beyond current Win32 Start Menu/App Paths discovery.
-- [ ] Decide whether guest tray text should be standardized in English, then verify the chosen language in the actual UI.
 - [ ] Decide whether the test VMs' unlock passwords should have at least 4 characters. `vm_evidence` does not redact secrets shorter than 4 characters (they would garble the record), and `Win10`'s stored password has 1 character, so it appears in exported evidence (counted in `skipped_short_secrets`).
 
 Known behavior kept on purpose: an action marks itself as mutating before it asks the agent to activate the target, so even a refusal before anything changed (such as `target_not_responding` for a hung window) makes older observations stale and the caller observes again. Activation that fails part-way can change the foreground, so the conservative invalidation stays.
@@ -115,6 +114,7 @@ Known behavior kept on purpose: an action marks itself as mutating before it ask
 - [x] Checkpoint `kind` and `holds_memory`: Hyper-V gives standard and production checkpoints the same snapshot type, so `kind` reports it as is and `holds_memory` (state `running` or `saved`) tells whether restoring brings the programs back. See the [contract](docs/features/vm-checkpoints.md#33-checkpoints).
 - [x] Release 0.3.0 published 2026-10-11 (tag `v0.3.0` at `82e18fe`, GitHub Release Latest); installed on the host from the release zip (hashes equal, server reports 0.3.0) and the agents of `Win10` and `Win10-PipeSifu` updated to 0.3.0.
 - [x] Agent desktop tests on a locked host: `TestWindowAt`, `TestFocusedHelper` and `TestControlHintNativeIdentityAndFallback` skip with a reason while the session is locked (`WTSSessionInfoEx`; Windows cannot be unlocked by a program, decision 2026-10-11) and run as before otherwise. The skip itself was not exercised on a locked host.
+- [x] Guest agent UI in English (decision 2026-10-11): tray menu `Host connected` / `Waiting for the host` / `Exit` and the uninstall message box, checked on the Win10 screen.
 - [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; interruption, expiry and old-agent coverage passed (section 1); release remains in section 4.
 
 The old title selectors remain removed. UI waits use HWND/PID, exact control properties or observation-bound runtime identity; they do not restore the legacy title-based interface.
