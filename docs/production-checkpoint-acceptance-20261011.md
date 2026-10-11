@@ -24,4 +24,13 @@ With `ProductionOnly` a production checkpoint cannot fall back to a standard one
 
 ## Finding: `kind` does not identify production checkpoints
 
-HyperHand derives `kind` from Hyper-V's `SnapshotType` and maps `Recovery` to `production`. A production checkpoint made by `Checkpoint-VM` has `SnapshotType` `Standard`, so it is reported as `kind: standard`. `Recovery` is the type of checkpoints made by backup applications. The documented `kind: production` therefore never appears for `vm_checkpoint` checkpoints. What a caller can rely on is `state`: `running` means the checkpoint holds memory and resumes running, `off` means disk only and restores to off. How to fix `kind` is open (see TODO).
+HyperHand derives `kind` from Hyper-V's `SnapshotType` and maps `Recovery` to `production`. A production checkpoint made by `Checkpoint-VM` has `SnapshotType` `Standard`, so it is reported as `kind: standard`. `Recovery` is the type of checkpoints made by backup applications. The documented `kind: production` therefore never appears for `vm_checkpoint` checkpoints. What a caller can rely on is `state`: `running` means the checkpoint holds memory and resumes running, `off` means disk only and restores to off. Resolved after checking Microsoft's documentation (`Msvm_VirtualSystemSettingData`: no snapshot type for production checkpoints; `Recovery` is a recovery VM's snapshot, made by backup software): `kind` now reports the snapshot type as is, and a new `holds_memory` field states whether the checkpoint saved memory.
+
+## holds_memory on Win10
+
+After the fix (`dev-20261011-090727-d16ad62-dirty`; evidence `build/prodcp-20261011/holds.json`), one checkpoint of the running VM under each setting, as created and as listed:
+
+- `ProductionOnly`: `kind: standard`, `state: off`, `holds_memory: false`.
+- `Standard`: `kind: standard`, `state: saved`, `holds_memory: true`. A standard checkpoint of a running VM reports `saved`, not `running`, on this host.
+
+Both were deleted by `vm_end_turn` and the setting is `Standard` again.
