@@ -20,7 +20,7 @@ Notepad with unsaved text, then `vm_shutdown`:
 
 - After 183 s the call failed (`failed`, reason `VM Win10 is still Running 3m0s after the shutdown request ... It was not turned off`). `vm_status` showed `power: running`. HyperHand did not power the VM off.
 - The guest was left in a pending sign-out: the agent had exited (`not_answering`), the console showed the lock screen and then the sign-in screen for the user, and neither the Hyper-V keyboard (the stored password, plain text, Ctrl+Alt+Del) nor clicks reached the password box over more than 8 minutes. The unsaved document could not be reached from inside the guest. The VM was recovered with `vm_turn_off` and `vm_start` (desktop usable, agent answering), losing the disposable document.
-- Blocked: whether `vm_shutdown` should detect blocking programs or leave the guest recoverable is a product decision (see TODO).
+- Decided afterwards (2026-10-11): the pending sign-out is Windows behavior, not something HyperHand can undo; the acceptance criterion is no power-off and an accurate report. `vm_shutdown` now says the guest may be signing the user out and names `vm_observe`, raw input, and `vm_turn_off` or `vm_restore` as the way out (see 3.2 in the [features](features/vm-checkpoints.md)); the reason quoted above is the earlier text.
 
 ## Directory mirror interruption and expiry
 
@@ -48,8 +48,8 @@ The uninstall ran from the guest's Run dialog (`%LOCALAPPDATA%\HyperHand\hyperha
 
 ## Blocked
 
-- **Production-only checkpoints:** need `Set-VM -CheckpointType ProductionOnly` on Win10 (it is `Standard`). HyperHand has no tool for it and the developer account has no Hyper-V administrator rights on the host; changing either is the user's decision.
-- **Long checkpoint merges at the timeout boundary:** HyperHand waits 15 minutes for a merge. A merge that long needs far more changed data than this VM and host can produce in a test, and a shorter test-only timeout would be a product change; the user's decision.
+- **Production-only checkpoints:** need `Set-VM -CheckpointType ProductionOnly` on Win10 (it is `Standard`). HyperHand has no tool for it and the developer account has no Hyper-V administrator rights on the host; decided afterwards: the user switches the setting from an elevated PowerShell for the acceptance and back afterwards.
+- **Long checkpoint merges at the timeout boundary:** HyperHand waits 15 minutes for a merge. A merge that long needs far more changed data than this VM and host can produce in a test, and a shorter test-only timeout would be a product change. Decided afterwards: covered by unit tests (`TestDeleteMergeTimeoutIsNotCompletion` and the `hyperv` job-wait deadline test) instead of a real merge.
 
 ## Not verified
 

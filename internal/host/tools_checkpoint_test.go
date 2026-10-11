@@ -428,6 +428,38 @@ func TestDeleteAfterListNoCheckpoint(t *testing.T) {
 	}
 }
 
+// deleteCounter counts DeleteCheckpoint calls.
+type deleteCounter struct {
+	*vmToolsBackend
+	deletes int
+}
+
+func (b *deleteCounter) DeleteCheckpoint(vm, id string, subtree bool) error {
+	b.deletes++
+	return b.vmToolsBackend.DeleteCheckpoint(vm, id, subtree)
+}
+
+// A merge that outlasts the 15-minute job wait is reported as possibly still running: failed with elapsed_ms and a
+// next that says so, nothing claimed deleted, the delete sent once and not repeated, the temp checkpoint still
+// registered.
+func TestDeleteMergeTimeoutIsNotCompletion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	b := &deleteCounter{vmToolsBackend: &vmToolsBackend{vms: []hyperv.VM{{Name: "Win10", ID: "id-a", State: "Running"}}}}
+	// The text hyperv.waitStateJob returns when the wait ends, as it arrives through the broker pipe.
+	b.deleteErr = errors.New(`Hyper-V job wait ended (JobState=4, ErrorCode=0, ErrorDescription=""); operation may still be running: context deadline exceeded`)
+	cs, d := connectTools(t, ctx, b)
+	d.turn.addTempCheckpoint("Win10", tempCheckpoint{ID: "id-2", Name: "x"})
+	e := callRefused(t, ctx, cs, "vm_checkpoint_delete", map[string]any{"id": "id-2"})
+	if e["error"] != codeFailed || !strings.Contains(e["next"].(string), "a merge may still be running") || e["elapsed_ms"] == nil ||
+		!strings.Contains(e["reason"].(string), "may still be running") || e["deleted"] != nil {
+		t.Errorf("timeout: %v", e)
+	}
+	if b.deletes != 1 || !reflect.DeepEqual(registeredTemps(d, "Win10"), []string{"id-2"}) {
+		t.Errorf("deletes %d, registered %v", b.deletes, registeredTemps(d, "Win10"))
+	}
+}
+
 func TestSubtreeOfIgnoresOrder(t *testing.T) {
 	l := hyperv.CheckpointList{Checkpoints: []hyperv.Checkpoint{
 		{ID: "c", ParentID: "b"}, // listed before its parent (clock set back)

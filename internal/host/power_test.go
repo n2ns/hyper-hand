@@ -31,6 +31,12 @@ func TestWaitOff(t *testing.T) {
 	if err := waitOff(context.Background(), running, func(time.Duration) {}, 0); err == nil || !strings.Contains(err.Error(), "not turned off") {
 		t.Errorf("timeout: %v", err)
 	}
+	// The timeout says what the guest may look like (pending sign-out, agent gone) and what to do next.
+	var te *toolError
+	if err := waitOff(context.Background(), running, func(time.Duration) {}, 0); !errors.As(err, &te) || te.Code != codeFailed ||
+		!strings.Contains(te.Reason, "signing the user out") || !strings.Contains(te.Next, "vm_observe") || !strings.Contains(te.Next, "vm_turn_off") || te.Fields["state"] != "running" {
+		t.Errorf("timeout error: %#v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := waitOff(ctx, running, func(time.Duration) {}, time.Minute); err == nil || !strings.Contains(err.Error(), "may still be in progress") {
