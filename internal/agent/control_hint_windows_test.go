@@ -116,6 +116,7 @@ func pumpHintHelper(t *testing.T, a proto.ControlsArgs) []proto.ControlInfo {
 }
 
 func TestControlHintNativeIdentityAndFallback(t *testing.T) {
+	requireUnlockedDesktop(t)
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	const noActivateToolTopmost = 0x08000000 | 0x80 | 0x8

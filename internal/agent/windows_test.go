@@ -22,6 +22,20 @@ var (
 	pEnableWindow    = user32.NewProc("EnableWindow")
 )
 
+// requireUnlockedDesktop skips a test that hit-tests or reads UI Automation on the interactive desktop while this
+// session is locked: the lock screen covers the desktop, and Windows lets no program unlock it. When the lock state
+// cannot be read the test runs.
+func requireUnlockedDesktop(t *testing.T) {
+	t.Helper()
+	var id uint32
+	if err := windows.ProcessIdToSessionId(windows.GetCurrentProcessId(), &id); err != nil {
+		return
+	}
+	if locked, err := sessionLocked(id); err == nil && locked {
+		t.Skip("the host desktop is locked; this test needs an unlocked interactive desktop, and Windows cannot be unlocked by a program")
+	}
+}
+
 // testWindow creates a visible, unactivated popup window ("STATIC" with SS_NOTIFY, so hit tests do not pass through it).
 func testWindow(t *testing.T, title string, owner windows.HWND, exStyle uintptr, x, y, w, h int32) windows.HWND {
 	t.Helper()
@@ -245,6 +259,7 @@ func TestWindowAtOffScreen(t *testing.T) {
 
 // A small always-on-top window on screen: window_at finds it at a point inside it, and not with x and y swapped.
 func TestWindowAt(t *testing.T) {
+	requireUnlockedDesktop(t)
 	runtime.LockOSThread() // window_at sends WM_NCHITTEST to this thread's window
 	defer runtime.UnlockOSThread()
 	const wsExTopmost, wsExNoActivate, wsExToolWindow = 0x8, 0x08000000, 0x80
