@@ -101,7 +101,7 @@ HyperHand has two executables and three roles:
 
 HyperHand sends no telemetry and makes no outbound internet connections. The host and the guest talk over Hyper-V sockets. Your MCP client receives screenshots and tool results; whether it sends them to a model provider depends on that client's configuration.
 
-The MCP endpoint listens only on `127.0.0.1` and has no authentication, so any program on your computer can use it to control your VMs. Unlock passwords are stored in Windows Credential Manager and are never returned to the AI. Details in [Privacy](docs/privacy.md).
+The MCP endpoint listens only on `127.0.0.1` and needs no authentication by design: it serves the AI clients on your own computer, and any program there can use it to control your VMs. Unlock passwords are stored in Windows Credential Manager and are never returned to the AI. Details in [Privacy](docs/privacy.md).
 
 ## Uninstall
 
