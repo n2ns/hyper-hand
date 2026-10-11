@@ -77,6 +77,15 @@ HyperHand names the checkpoints it creates after the task's run ID (see 2.1) and
 - Per checkpoint: `id`; `name`; `parent` (the parent's id, `null` for a root); `created_at` (RFC 3339 with the host's offset); `type`, `run_id` and `label` (see above); `kind` (`standard`, `production` or another Hyper-V snapshot type lower-cased, see above); `state`, the power state the checkpoint saved (`running`, `off` or `saved`; `running` means it holds memory and resumes directly); `current`; `children`, the number of direct children (deleting the checkpoint re-parents them).
 - `checkpoints` is `[]` when the VM has none.
 
+#### vm_set_checkpoint_type
+
+`vm_set_checkpoint_type` sets the VM's checkpoint setting, which decides what `vm_checkpoint` creates.
+
+- Parameters: `vm` (required) and `type`: `Standard`, `Production`, `ProductionOnly` or `Disabled`, case-insensitive. Another value is `invalid_argument` with field `types` listing them.
+- It reads the current setting (`vm_checkpoints`' `checkpoint_type`) and, when it differs, runs `Set-VM -CheckpointType` through the service (broker op `checkpoint_type`, see 10.4; PowerShell, see 3.4). Hyper-V allows the change while the VM runs; it changes nothing in the guest, and existing checkpoints keep what they are.
+- Result: `{"vm": "Win10", "checkpoint_type": "ProductionOnly", "previous": "Standard"}`; when the setting already had that value, `previous` equals it and nothing is written.
+- It needs write ownership of the VM, like the other checkpoint tools.
+
 #### vm_checkpoint
 
 `vm_checkpoint` creates a checkpoint of the VM's current state with `Checkpoint-VM`. It takes `label` (default `hhmmss`) and `keep` (default `false`) and names the checkpoint `<run_id>-temp-<label>`, or `<run_id>-keep-<label>` with `keep: true`. The new checkpoint becomes the current state's parent.
@@ -129,7 +138,7 @@ HyperHand names the checkpoints it creates after the task's run ID (see 2.1) and
 
 ### 3.4 PowerShell-based operations
 
-`vm_checkpoints`, `vm_checkpoint`, `vm_restore`, the rename of `vm_checkpoint_keep` and the file copy of `vm_install_agent` (see 8.1) run a hidden, non-interactive Windows PowerShell on the host with `$ErrorActionPreference = 'Stop'`, the VM looked up by ID and UTF-8 output. A failure is reported as `failed` with reason `powershell: <error>: <stderr and stdout>`. Checkpoint deletion (`vm_checkpoint_delete`, `vm_end_turn`) goes through WMI (`Msvm_VirtualSystemSnapshotService`, see 3.3) instead.
+`vm_checkpoints`, `vm_checkpoint`, `vm_restore`, `vm_set_checkpoint_type`, the rename of `vm_checkpoint_keep` and the file copy of `vm_install_agent` (see 8.1) run a hidden, non-interactive Windows PowerShell on the host with `$ErrorActionPreference = 'Stop'`, the VM looked up by ID and UTF-8 output. A failure is reported as `failed` with reason `powershell: <error>: <stderr and stdout>`. Checkpoint deletion (`vm_checkpoint_delete`, `vm_end_turn`) goes through WMI (`Msvm_VirtualSystemSnapshotService`, see 3.3) instead.
 
 ### 3.5 Session readiness and unlock: vm_start, vm_status, vm_unlock
 

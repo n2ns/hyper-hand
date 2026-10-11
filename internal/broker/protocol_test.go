@@ -82,6 +82,20 @@ func TestCheckpointOperationsAccepted(t *testing.T) {
 			t.Errorf("%s accepted an empty name", op)
 		}
 	}
+	// checkpoint_type takes exactly one of the Set-VM -CheckpointType values in name.
+	for _, name := range []string{"Standard", "Production", "ProductionOnly", "Disabled"} {
+		if err := validateRequest(request{Op: "checkpoint_type", VM: "Win10", Name: name}, 0); err != nil {
+			t.Errorf("checkpoint_type %s: %v", name, err)
+		}
+	}
+	for _, name := range []string{"", "standard", "Standard; Stop-Computer"} {
+		if err := validateRequest(request{Op: "checkpoint_type", VM: "Win10", Name: name}, 0); err == nil {
+			t.Errorf("checkpoint_type accepted %q", name)
+		}
+	}
+	if operationTimeout("checkpoint_type") != time.Minute {
+		t.Errorf("checkpoint_type timeout %v", operationTimeout("checkpoint_type"))
+	}
 	// checkpoint_delete carries subtree; the field survives the header round trip.
 	var b bytes.Buffer
 	if err := writeFrame(&b, request{Op: "checkpoint_delete", VM: "Win10", ID: id, Subtree: true}, 0, nil); err != nil {

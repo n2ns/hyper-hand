@@ -72,6 +72,7 @@ type vmToolsBackend struct {
 	createErr          error
 	tree               *hyperv.CheckpointList // nil: defaultTree on first use
 	deleteErr          error                  // returned by DeleteCheckpoint and RestoreCheckpoint when set
+	typeSets           []string               // SetCheckpointType calls as vm=type
 	listCheckpointsErr error                  // returned by ListCheckpoints when set
 }
 
@@ -114,6 +115,15 @@ func (b *vmToolsBackend) Find(name string) (hyperv.VM, error) {
 	}
 	return hyperv.VM{}, errors.New("VM \"" + name + "\" not found")
 }
+// SetCheckpointType changes the tree's checkpoint setting and records the call.
+func (b *vmToolsBackend) SetCheckpointType(vm, t string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.typeSets = append(b.typeSets, vm+"="+t)
+	b.current().CheckpointType = t
+	return nil
+}
+
 func (b *vmToolsBackend) ListCheckpoints(vm string) (hyperv.CheckpointList, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()

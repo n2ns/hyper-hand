@@ -2,9 +2,12 @@ package host
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"hyperhand/internal/hyperv"
 )
 
 type checkpointDeleteIn struct {
@@ -29,10 +32,48 @@ type checkpointDeleteOut struct {
 	ElapsedMs         int64           `json:"elapsed_ms"`
 }
 
-// registerCheckpoint registers vm_checkpoint_delete and vm_checkpoint_keep (vm_checkpoints, vm_checkpoint and
-// vm_restore are in registerVM).
+// checkpointTypeIn is vm_set_checkpoint_type's input.
+type checkpointTypeIn struct {
+	VM   string `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
+	Type string `json:"type" jsonschema:"Standard (disk and memory; restores to the running state), Production (application-consistent through the guest's VSS, restores to off; falls back to Standard when VSS fails), ProductionOnly (like Production but fails instead of falling back) or Disabled (vm_checkpoint refused); case-insensitive"`
+}
+
+// checkpointTypeOut is vm_set_checkpoint_type's result: the setting before and after.
+type checkpointTypeOut struct {
+	VM             string `json:"vm"`
+	CheckpointType string `json:"checkpoint_type"`
+	Previous       string `json:"previous"`
+}
+
+// registerCheckpoint registers vm_set_checkpoint_type, vm_checkpoint_delete and vm_checkpoint_keep (vm_checkpoints,
+// vm_checkpoint and vm_restore are in registerVM).
 func registerCheckpoint(d *deps) {
 	backend := d.backend
+	addToolIn(d, toolSpec{name: "vm_set_checkpoint_type", desc: "Set the VM's checkpoint type, the Hyper-V setting (Set-VM -CheckpointType) that decides what kind of checkpoint vm_checkpoint creates: Standard, Production, ProductionOnly or Disabled. Existing checkpoints keep their kind. Allowed while the VM runs; changes nothing in the guest. Returns the new checkpoint_type and the previous one; an unchanged setting is not written again. vm_checkpoints reports the current setting.", idempotent: true}, func(ctx context.Context, in checkpointTypeIn) (*mcp.CallToolResult, error) {
+		want := ""
+		for _, t := range hyperv.CheckpointTypes {
+			if strings.EqualFold(t, strings.TrimSpace(in.Type)) {
+				want = t
+			}
+		}
+		if want == "" {
+			return nil, refuse(codeInvalidArgument, "pass type as one of "+strings.Join(hyperv.CheckpointTypes, ", "), map[string]any{"types": hyperv.CheckpointTypes}, "unknown checkpoint type %q", in.Type)
+		}
+		v, err := backend.Find(in.VM)
+		if err != nil {
+			return nil, vmErr(err)
+		}
+		l, err := backend.ListCheckpoints(v.Name)
+		if err != nil {
+			return nil, err
+		}
+		if l.CheckpointType != want {
+			if err := backend.SetCheckpointType(v.Name, want); err != nil {
+				return nil, err
+			}
+		}
+		return jsonResult(checkpointTypeOut{VM: v.Name, CheckpointType: want, Previous: l.CheckpointType})
+	})
 	addToolIn(d, toolSpec{name: "vm_checkpoint_delete", desc: "Delete a checkpoint selected by id (from vm_checkpoints; preferred, and the only selector a manual checkpoint accepts) or by name (temp and keep checkpoints, when exactly one has it). Its disk differences are merged into its children or, when it is the current state's parent (merged_into_current), into the VM's current disk; children are re-parented to its parent. With subtree: true it and every descendant are deleted. Merging can take minutes for large differences; the call waits for it. Types: temp (this or another run's rollback point), keep (a baseline; delete only when it is no longer needed), manual (made outside HyperHand).", destructive: true}, func(ctx context.Context, in checkpointDeleteIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM)
 		if err != nil {

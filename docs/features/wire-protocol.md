@@ -67,5 +67,6 @@ The tray requests checkpoint operations from `HyperHandService` over the broker 
 | `checkpoint_restore` | `{vm, id}` | none (`Restore-VMSnapshot`) |
 | `checkpoint_delete` | `{vm, id, subtree}` | none (`DestroySnapshot`, or `DestroySnapshotTree` with `subtree`; waits for the job up to 15 minutes) |
 | `checkpoint_rename` | `{vm, id, name}` | none (`Rename-VMSnapshot`) |
+| `checkpoint_type` | `{vm, name}` with `name` the type | none (`Set-VM -CheckpointType`) |
 
-The service rejects `checkpoint_restore`, `checkpoint_delete` and `checkpoint_rename` whose `id` is not a GUID in `8-4-4-4-12` form, and `checkpoint_create` or `checkpoint_rename` without `name`. `checkpoint_create`, `checkpoint_restore`, `checkpoint_delete` and `checkpoint_rename` have a 15-minute timeout like `copy`; `checkpoints` has one minute. A missing `id` fails with `checkpoint not found: <id>`, which the tools report as `no_checkpoint`.
+The service rejects `checkpoint_restore`, `checkpoint_delete` and `checkpoint_rename` whose `id` is not a GUID in `8-4-4-4-12` form, and `checkpoint_create` or `checkpoint_rename` without `name`, and `checkpoint_type` whose `name` is not exactly `Standard`, `Production`, `ProductionOnly` or `Disabled`. `checkpoint_create`, `checkpoint_restore`, `checkpoint_delete` and `checkpoint_rename` have a 15-minute timeout like `copy`; `checkpoints` and `checkpoint_type` have one minute. A missing `id` fails with `checkpoint not found: <id>`, which the tools report as `no_checkpoint`.

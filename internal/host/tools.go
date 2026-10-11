@@ -21,7 +21,7 @@ type vmIn struct {
 //	tools_vm.go       VM power, status, unlock, checkpoints, exec, files, clipboard, wait, agent install/update
 //	tools_observe.go  vm_windows, vm_observe (sets d.observe)
 //	tools_actions.go  vm_click, vm_drag, vm_scroll, vm_type, vm_key, vm_set_value, vm_invoke
-//	tools_checkpoint.go vm_checkpoint_delete, vm_checkpoint_keep (registered from registerVM)
+//	tools_checkpoint.go vm_set_checkpoint_type, vm_checkpoint_delete, vm_checkpoint_keep (registered from registerVM)
 //	tools_launch.go   vm_launch
 //	tools_apps.go     vm_apps
 //	tools_fileinfo.go vm_file_info

@@ -141,6 +141,9 @@ func (Client) RestoreCheckpoint(vm, id string) error {
 func (Client) RenameCheckpoint(vm, id, name string) error {
 	return call(request{Op: "checkpoint_rename", VM: vm, ID: id, Name: name})
 }
+func (Client) SetCheckpointType(vm, t string) error {
+	return call(request{Op: "checkpoint_type", VM: vm, Name: t})
+}
 func (Client) Screenshot(vm string) ([]byte, int, int, error) {
 	out, b, err := rpc(request{Op: "screenshot", VM: vm}, nil, 0)
 	return b, out.Width, out.Height, err
