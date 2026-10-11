@@ -51,3 +51,10 @@ Earlier the same day, a 248-character check command typed into the Run dialog on
 - **The Run dialog drops long commands.** Commands of exactly 250, 258 and 259 characters typed into the Run dialog ran; 260 and 265 did not. The dialog closed without any message either way.
 - **Cause.** The earlier command had 248 characters, but `%LOCALAPPDATA%` expands from 14 to 26, so it became 260.
 - **Effect on HyperHand.** None. `vm_install_agent` types a command of about 90 characters into the Run dialog. Callers who type into the Run dialog themselves must stay at 259 characters or fewer after variable expansion.
+
+## vm_evidence journal limits on the installed host
+
+Build `dev-20261011-104854-28c6078`. Evidence: `build/evidence-limits-20261011/` (`limits.py`, `images.py`, results, export zips).
+
+- **Both limits:** one task made 120 full-resolution screenshots (`vm_observe`, 367 MiB of PNG in total), then 2010 `vm_status` calls, then `vm_evidence`. The export held 2000 calls, the newest, and reported `omitted: {calls: 130, screenshots: 120}`: the 130 oldest calls held all 120 screenshots, each counted once. The zip was 42 KB and took 4.1 s.
+- **Screenshot limit alone:** another task made 60 screenshots (183 MiB) and exported. It kept 60 calls and the newest 41 screenshots (about 125 MiB) and reported `omitted: {calls: 0, screenshots: 19}`. The zip was 131 MB and took 2.3 s.
