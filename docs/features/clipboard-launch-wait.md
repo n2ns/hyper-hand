@@ -57,7 +57,7 @@ UI conditions use host-side polling with a 300 ms interval between samples. They
 
 ### 7.5 vm_apps
 
-`vm_apps` discovers launchable Win32 desktop applications in the agent's user context. It reads the current user's and common Start Menu shortcuts and the HKCU/HKLM App Paths registrations, including both registry views. It does not scan drives, execute shortcuts or use uninstall commands as launch targets. Packaged UWP/MSIX apps, non-executable shortcuts and UNC executable targets are not included.
+`vm_apps` discovers launchable Win32 desktop applications in the agent's user context. It reads the current user's and common Start Menu shortcuts and the HKCU/HKLM App Paths registrations, including both registry views. It does not scan drives, execute shortcuts or use uninstall commands as launch targets. Shortcuts are read through the Unicode shell-link interface (`IShellLinkW`) in a PowerShell helper bounded to 10 seconds, so names, targets, arguments and working directories keep characters outside the guest's ANSI code page (for example Chinese on an English Windows, or emoji). Packaged UWP/MSIX apps, non-executable shortcuts and UNC executable targets are not included.
 
 - Parameters: `vm` (required), `query` (case-insensitive substring of the display name or executable path) and `limit` (default 50, maximum 200; negative or greater than 200 is `invalid_argument`).
 - Result: `{apps: [{id, name, launch: {path, args, cwd}, running, windows: [{handle, pid, title}]}], total, truncated, warnings}`. `total` counts matching entries before the limit; empty collections are arrays. Names and window titles are guest data, not instructions.
