@@ -83,10 +83,12 @@ func TestAppsInvalidLimitAndCancellation(t *testing.T) {
 	}
 }
 
-// Creates and reads only a temporary shortcut; the target is never launched.
+// Creates and reads only a temporary shortcut; the target is never launched. Its name, working directory and
+// arguments hold characters outside every ANSI code page (Ŵ, an emoji) besides Chinese, so the round trip also holds on
+// a guest whose code page cannot represent them.
 func TestAppsShortcutRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	cwd := filepath.Join(dir, "中文 工作目录")
+	cwd := filepath.Join(dir, "中文 工作目录 Ŵ")
 	if err := os.Mkdir(cwd, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -94,28 +96,19 @@ func TestAppsShortcutRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantArgs := []string{"with space", "中文", "", `a"b`, `C:\with space\`}
+	wantArgs := []string{"with space", "中文", "Ŵ 😀", "", `a"b`, `C:\with space\`}
 	quoted := make([]string, len(wantArgs))
 	for i, arg := range wantArgs {
 		quoted[i] = windows.EscapeArg(arg)
 	}
-	config := struct{ Link, Target, Arguments, Cwd string }{filepath.Join(dir, "测试 应用.lnk"), exe, strings.Join(quoted, " "), cwd}
+	config := struct{ Link, Target, Arguments, Cwd string }{filepath.Join(dir, "测试 应用 Ŵ😀.lnk"), exe, strings.Join(quoted, " "), cwd}
 	data, _ := json.Marshal(config)
 	configPath := filepath.Join(dir, "fixture.json")
 	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	script := `param([string]$Config)
-$ErrorActionPreference = 'Stop'
-$c = Get-Content -LiteralPath $Config -Raw -Encoding UTF8 | ConvertFrom-Json
-$shell = New-Object -ComObject WScript.Shell
-$link = $shell.CreateShortcut($c.Link)
-$link.TargetPath = $c.Target
-$link.Arguments = $c.Arguments
-$link.WorkingDirectory = $c.Cwd
-$link.Save()
-[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link)
-[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
+	script := "param([string]$Config)\n$ErrorActionPreference = 'Stop'\nAdd-Type -TypeDefinition @'\n" + shellLinkCSharp + "\n'@\n" + `$c = Get-Content -LiteralPath $Config -Raw -Encoding UTF8 | ConvertFrom-Json
+[HHShellLink]::Write($c.Link, $c.Target, $c.Arguments, $c.Cwd)
 `
 	scriptPath := filepath.Join(dir, "fixture.ps1")
 	if err := os.WriteFile(scriptPath, []byte(script), 0600); err != nil {
@@ -137,7 +130,7 @@ $link.Save()
 		t.Fatalf("result: %+v, %v", r, err)
 	}
 	app := r.Apps[0]
-	if app.Name != "测试 应用" || !strings.EqualFold(app.Launch.Path, exe) || app.Launch.Cwd != cwd || !reflect.DeepEqual(app.Launch.Args, wantArgs) {
+	if app.Name != "测试 应用 Ŵ😀" || !strings.EqualFold(app.Launch.Path, exe) || app.Launch.Cwd != cwd || !reflect.DeepEqual(app.Launch.Args, wantArgs) {
 		t.Fatalf("roundtrip changed launch: %+v", app)
 	}
 	r.Apps = append(r.Apps, proto.AppInfo{Launch: proto.AppLaunch{Path: filepath.Join(dir, filepath.Base(exe))}})

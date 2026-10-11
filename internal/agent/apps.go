@@ -206,6 +206,72 @@ func localAppPath(path string) bool {
 	return len(path) >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/') && filepath.IsAbs(path) && strings.EqualFold(filepath.Ext(path), ".exe")
 }
 
+// shellLinkCSharp reads and writes shortcuts through IShellLinkW and IPersistFile, which keep every string in
+// Unicode. WScript.Shell converts paths and arguments through the system ANSI code page, so a shortcut whose name,
+// target or arguments hold characters outside it (Chinese on an English guest, emoji anywhere) failed to load or came
+// back as '?'. PowerShell compiles it with Add-Type.
+const shellLinkCSharp = `
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+
+public static class HHShellLink {
+    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int cch, IntPtr findData, uint flags);
+        void GetIDList(out IntPtr pidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
+        void GetHotkey(out short hotkey);
+        void SetHotkey(short hotkey);
+        void GetShowCmd(out int showCmd);
+        void SetShowCmd(int showCmd);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder iconPath, int cch, out int icon);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string iconPath, int icon);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pathRel, uint reserved);
+        void Resolve(IntPtr hwnd, uint flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string file);
+    }
+
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+    class ShellLink {}
+
+    const int Size = 32768;
+
+    // Read returns the target path, arguments and working directory of the shortcut at path.
+    public static string[] Read(string path) {
+        object link = new ShellLink();
+        try {
+            ((IPersistFile)link).Load(path, 0);
+            IShellLinkW l = (IShellLinkW)link;
+            StringBuilder target = new StringBuilder(Size), args = new StringBuilder(Size), dir = new StringBuilder(Size);
+            l.GetPath(target, Size, IntPtr.Zero, 0);
+            l.GetArguments(args, Size);
+            l.GetWorkingDirectory(dir, Size);
+            return new string[] { target.ToString(), args.ToString(), dir.ToString() };
+        } finally { Marshal.FinalReleaseComObject(link); }
+    }
+
+    // Write creates the shortcut at path (the tests' fixture).
+    public static void Write(string path, string target, string args, string dir) {
+        object link = new ShellLink();
+        try {
+            IShellLinkW l = (IShellLinkW)link;
+            l.SetPath(target);
+            l.SetArguments(args);
+            l.SetWorkingDirectory(dir);
+            ((IPersistFile)link).Save(path, true);
+        } finally { Marshal.FinalReleaseComObject(link); }
+    }
+}
+`
+
 // COM shortcut parsing is isolated in a bounded child process; a broken shell extension cannot wedge the agent.
 // Each record is flushed independently, preserving completed sources if a later source fails or times out.
 const appShortcutsScript = `
@@ -213,7 +279,9 @@ param([string]$Root)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 function Emit($value) { [Console]::WriteLine(($value | ConvertTo-Json -Compress -Depth 4)) }
-$shell = New-Object -ComObject WScript.Shell
+Add-Type -TypeDefinition @'
+` + shellLinkCSharp + `
+'@
 $roots = @([Environment]::GetFolderPath('StartMenu'), [Environment]::GetFolderPath('CommonStartMenu'))
 if ($Root) { $roots = @($Root) }
 foreach ($folder in $roots) {
@@ -236,20 +304,17 @@ foreach ($folder in $roots) {
             }
             foreach ($file in $files) {
                 try {
-                    $link = $shell.CreateShortcut($file.FullName)
-                    try {
-                        $target = [Environment]::ExpandEnvironmentVariables($link.TargetPath)
-                        if ($target -match '^[A-Za-z]:[\\/]' -and [IO.Path]::GetExtension($target) -ieq '.exe' -and (Test-Path -LiteralPath $target -PathType Leaf)) {
-                            Emit @{ app = @{ name = $file.BaseName; path = $target; arguments = $link.Arguments; cwd = [Environment]::ExpandEnvironmentVariables($link.WorkingDirectory) } }
-                        }
-                    } finally { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link) }
+                    $link = [HHShellLink]::Read($file.FullName)
+                    $target = [Environment]::ExpandEnvironmentVariables($link[0])
+                    if ($target -match '^[A-Za-z]:[\\/]' -and [IO.Path]::GetExtension($target) -ieq '.exe' -and (Test-Path -LiteralPath $target -PathType Leaf)) {
+                        Emit @{ app = @{ name = $file.BaseName; path = $target; arguments = $link[1]; cwd = [Environment]::ExpandEnvironmentVariables($link[2]) } }
+                    }
                 } catch { Emit @{ warning = ($folder + '/' + $file.Name + ': ' + $_.Exception.Message) } }
             }
         }
         Emit @{ completed = 1 }
     } catch { Emit @{ warning = ($folder + ': ' + $_.Exception.Message) } }
 }
-[void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
 `
 
 func startMenuApps(ctx context.Context) appSourceResult {
