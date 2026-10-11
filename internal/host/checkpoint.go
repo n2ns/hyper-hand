@@ -88,9 +88,16 @@ type checkpointOut struct {
 	Label     *string `json:"label"`
 	Kind      string  `json:"kind"`
 	State     string  `json:"state"`
-	Current   bool    `json:"current"`
-	Children  int     `json:"children"`
+	// HoldsMemory: the checkpoint saved memory (state running or saved), so restoring it brings the programs back;
+	// false for a production checkpoint and for one taken while the VM was off, which restore to off.
+	HoldsMemory bool `json:"holds_memory"`
+	Current     bool `json:"current"`
+	Children    int  `json:"children"`
 }
+
+// holdsMemory reports whether a checkpoint saved in state holds memory: Hyper-V keeps a saved-state file for a
+// checkpoint of a running or saved VM (Msvm_VirtualSystemSettingData.IsSaved), never for a production checkpoint.
+func holdsMemory(state string) bool { return state == "running" || state == "saved" }
 
 // checkpointTree converts l to vm_checkpoints' entries, in l's (creation) order.
 func checkpointTree(l hyperv.CheckpointList) []checkpointOut {
@@ -106,7 +113,7 @@ func checkpointTree(l hyperv.CheckpointList) []checkpointOut {
 		out = append(out, checkpointOut{
 			ID: c.ID, Name: c.Name, Parent: nullable(c.ParentID), CreatedAt: c.CreatedAt,
 			Type: typ, RunID: nullable(runID), Label: nullable(label), Kind: c.Kind, State: c.State,
-			Current: c.ID != "" && c.ID == l.CurrentParentID, Children: children[c.ID],
+			HoldsMemory: holdsMemory(c.State), Current: c.ID != "" && c.ID == l.CurrentParentID, Children: children[c.ID],
 		})
 	}
 	return out

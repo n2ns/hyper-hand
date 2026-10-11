@@ -344,7 +344,7 @@ func TestVMListAndCheckpointsShapes(t *testing.T) {
 	callJSON(t, ctx, cs, "vm_checkpoints", nil, &cps)
 	want := checkpointsOut{VM: "Win10", CheckpointType: "Standard", CurrentParent: ptr("id-2"), Checkpoints: []checkpointOut{
 		{ID: "id-1", Name: "baseline", CreatedAt: "2026-10-04T10:00:00+08:00", Type: "manual", Kind: "standard", State: "off", Children: 1},
-		{ID: "id-2", Name: "run-20261010-0812-7f3a-temp-step3", Parent: ptr("id-1"), CreatedAt: "2026-10-10T08:15:00+08:00", Type: "temp", RunID: ptr("run-20261010-0812-7f3a"), Label: ptr("step3"), Kind: "standard", State: "running", Current: true},
+		{ID: "id-2", Name: "run-20261010-0812-7f3a-temp-step3", Parent: ptr("id-1"), CreatedAt: "2026-10-10T08:15:00+08:00", Type: "temp", RunID: ptr("run-20261010-0812-7f3a"), Label: ptr("step3"), Kind: "standard", State: "running", HoldsMemory: true, Current: true},
 	}}
 	if !reflect.DeepEqual(cps, want) {
 		t.Errorf("vm_checkpoints %s", jsonString(cps))

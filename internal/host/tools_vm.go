@@ -151,13 +151,14 @@ type checkpointsOut struct {
 
 // checkpointCreatedOut is vm_checkpoint's result.
 type checkpointCreatedOut struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Type      string  `json:"type"`
-	Kind      string  `json:"kind"`
-	State     string  `json:"state"`
-	Parent    *string `json:"parent"`
-	CreatedAt string  `json:"created_at"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Type        string  `json:"type"`
+	Kind        string  `json:"kind"`
+	State       string  `json:"state"`
+	HoldsMemory bool    `json:"holds_memory"`
+	Parent      *string `json:"parent"`
+	CreatedAt   string  `json:"created_at"`
 }
 
 // restoreOut is vm_restore's result. State is the VM's power state after the restore (and the start, unless
@@ -358,7 +359,7 @@ func registerVM(d *deps) {
 	addToolIn(d, toolSpec{name: "vm_pause", desc: "Pause a running VM: Hyper-V freezes it in memory at once (state paused); nothing runs in the guest and its agent does not answer until it is resumed. Resume it with vm_start, which waits until the desktop is usable. A paused VM stays paused; an off or saved VM cannot be paused.", destructive: false, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
 		return d.suspend(in.VM, "Paused", backend.Pause)
 	})
-	addToolIn(d, toolSpec{name: "vm_checkpoints", desc: "List the VM's checkpoint tree in creation order (parents before children). Each entry has id (the stable selector for vm_restore, vm_checkpoint_delete and vm_checkpoint_keep; names may repeat), name, parent (id or null for a root), created_at, type, run_id and label (null for manual), kind (standard: may hold memory and resume running; production: application-consistent, restores to off), state (the power state it saved: running, off or saved), current (the VM's current state branches from it; also current_parent) and children (direct children; deleting a checkpoint re-parents them). Types: temp (<run_id>-temp-<label>, a rollback point vm_end_turn deletes), keep (<run_id>-keep-<label>, a baseline kept across runs), manual (any other name, made outside HyperHand; delete by id only). checkpoint_type is the VM's Hyper-V setting (Standard, Production, ProductionOnly, Disabled) that decides what vm_checkpoint creates.", readOnly: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
+	addToolIn(d, toolSpec{name: "vm_checkpoints", desc: "List the VM's checkpoint tree in creation order (parents before children). Each entry has id (the stable selector for vm_restore, vm_checkpoint_delete and vm_checkpoint_keep; names may repeat), name, parent (id or null for a root), created_at, type, run_id and label (null for manual), kind (Hyper-V's snapshot type: standard for every checkpoint vm_checkpoint makes, production ones included; recovery, planned, missing or replica for checkpoints not to restore to), holds_memory (true: memory saved, restoring brings the programs back running; false: disk only, as every production checkpoint, restores to off), state (the power state it saved: running, off or saved), current (the VM's current state branches from it; also current_parent) and children (direct children; deleting a checkpoint re-parents them). Types: temp (<run_id>-temp-<label>, a rollback point vm_end_turn deletes), keep (<run_id>-keep-<label>, a baseline kept across runs), manual (any other name, made outside HyperHand; delete by id only). checkpoint_type is the VM's Hyper-V setting (Standard, Production, ProductionOnly, Disabled) that decides what vm_checkpoint creates.", readOnly: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM)
 		if err != nil {
 			return nil, vmErr(err)
@@ -391,9 +392,9 @@ func registerVM(d *deps) {
 		if err != nil {
 			return nil, err
 		}
-		return jsonResult(checkpointCreatedOut{ID: c.ID, Name: c.Name, Type: c.Type, Kind: c.Kind, State: c.State, Parent: nullable(c.ParentID), CreatedAt: c.CreatedAt})
+		return jsonResult(checkpointCreatedOut{ID: c.ID, Name: c.Name, Type: c.Type, Kind: c.Kind, State: c.State, HoldsMemory: holdsMemory(c.State), Parent: nullable(c.ParentID), CreatedAt: c.CreatedAt})
 	})
-	addToolIn(d, toolSpec{name: "vm_restore", desc: "Restore the VM to a checkpoint selected by id (from vm_checkpoints; preferred) or by name (accepted only when exactly one checkpoint has it; ambiguous_target lists the ids otherwise), then start the VM if it is not running (unless start is false). The guest's current state is replaced by the checkpoint's and lost, unless save_current is true: then it is first saved as a temp checkpoint labelled before-restore and reported as saved_current. The checkpoint itself stays. The result's state is the VM's power state afterwards; a running standard checkpoint resumes directly, a production or off one needs the start.", destructive: true}, func(ctx context.Context, in restoreIn) (*mcp.CallToolResult, error) {
+	addToolIn(d, toolSpec{name: "vm_restore", desc: "Restore the VM to a checkpoint selected by id (from vm_checkpoints; preferred) or by name (accepted only when exactly one checkpoint has it; ambiguous_target lists the ids otherwise), then start the VM if it is not running (unless start is false). The guest's current state is replaced by the checkpoint's and lost, unless save_current is true: then it is first saved as a temp checkpoint labelled before-restore and reported as saved_current. The checkpoint itself stays. The result's state is the VM's power state afterwards; a checkpoint with holds_memory resumes directly, one without (production, or taken while off) comes back off and needs the start.", destructive: true}, func(ctx context.Context, in restoreIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM) // resolve "" now: after the restore the VM may be off
 		if err != nil {
 			return nil, vmErr(err)

@@ -50,7 +50,7 @@ func TestCheckpointCreate(t *testing.T) {
 	var out checkpointCreatedOut
 	callJSON(t, ctx, cs, "vm_checkpoint", map[string]any{"label": "step4"}, &out)
 	name := d.runID + "-temp-step4"
-	want := checkpointCreatedOut{ID: "id-" + name, Name: name, Type: "temp", Kind: "standard", State: "running", Parent: ptr("id-2"), CreatedAt: "2026-10-10T09:00:00+08:00"}
+	want := checkpointCreatedOut{ID: "id-" + name, Name: name, Type: "temp", Kind: "standard", State: "running", HoldsMemory: true, Parent: ptr("id-2"), CreatedAt: "2026-10-10T09:00:00+08:00"}
 	if !reflect.DeepEqual(out, want) {
 		t.Errorf("vm_checkpoint %s", jsonString(out))
 	}
@@ -496,5 +496,14 @@ func TestSubtreeOfIgnoresOrder(t *testing.T) {
 	got := subtreeOf(l, "b")
 	if len(got) != 2 || got[0].ID != "c" || got[1].ID != "b" {
 		t.Errorf("subtree of b: %+v", got)
+	}
+}
+
+// A checkpoint holds memory when Hyper-V kept a saved state for it: running or saved, never off (production).
+func TestHoldsMemory(t *testing.T) {
+	for state, want := range map[string]bool{"running": true, "saved": true, "off": false, "": false} {
+		if holdsMemory(state) != want {
+			t.Errorf("holdsMemory(%q) = %v", state, !want)
+		}
 	}
 }
