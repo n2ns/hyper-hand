@@ -40,3 +40,14 @@ Builds `dev-20261011-101346-7c8bdf7-dirty` and, for the timeout reports, `dev-20
 - `vm_find_controls` returned after 10.1 s, twice, with `target_not_responding (window hung)`.
 - `vm_windows` (≤ 2.1 s), screenshots (≤ 6 s) and `vm_key` all returned. `vm_key` succeeded because AutoCAD already held the foreground and needed no activation: the key was queued and processed once AutoCAD recovered, so `ok` did not mean that AutoCAD had handled it.
 - `REGEN` afterwards did not hang it. AutoCAD answered again 63 s after the command was typed, and every tool worked afterwards.
+
+## Hyper-V keyboard and the Run dialog
+
+Build `dev-20261011-104854-28c6078`. Evidence: `build/rawtype-20261011/` (`rawtype.py`, `runlen.py`, results).
+
+Earlier the same day, a 248-character check command typed into the Run dialog on the Hyper-V keyboard did not run, while three shorter ones did (see [Not verified](acceptance-gaps-20261011.md#not-verified)).
+
+- **Typing is intact.** With the agent stopped, `vm_type` without a target typed four lines into Notepad on the Hyper-V keyboard: that exact command, 248 letters, a line of every special ASCII character (`()&"%><|^!@#$*_+-=[]{};:',./?\~` and a backquote) and `(a & b)`. After `vm_install_agent`, the text read back through the clipboard equalled every line.
+- **The Run dialog drops long commands.** Commands of exactly 250, 258 and 259 characters typed into the Run dialog ran; 260 and 265 did not. The dialog closed without any message either way.
+- **Cause.** The earlier command had 248 characters, but `%LOCALAPPDATA%` expands from 14 to 26, so it became 260.
+- **Effect on HyperHand.** None. `vm_install_agent` types a command of about 90 characters into the Run dialog. Callers who type into the Run dialog themselves must stay at 259 characters or fewer after variable expansion.
