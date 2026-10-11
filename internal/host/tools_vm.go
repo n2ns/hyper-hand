@@ -28,7 +28,7 @@ type execIn struct {
 	Shell      string `json:"shell,omitempty" jsonschema:"powershell (default) or cmd"`
 	Cwd        string `json:"cwd,omitempty" jsonschema:"working directory in the guest"`
 	TimeoutMs  int    `json:"timeout_ms,omitempty" jsonschema:"default 60000; with background default 3600000 (1 hour), at most 86400000"`
-	Admin      bool   `json:"admin,omitempty" jsonschema:"run elevated (administrator); not with background. If the guest's UAC asks for consent, the command waits for that prompt within timeout_ms; a timeout before elevation completed (prompt unanswered, or timeout_ms too short) is elevation_timeout and the command did not run"`
+	Admin      bool   `json:"admin,omitempty" jsonschema:"run elevated (administrator); not with background. If the guest's UAC asks for consent, the command waits for that prompt within timeout_ms; a timeout before elevation completed (prompt unanswered, or timeout_ms too short) is elevation_timeout and the command did not run. While it waits, other calls that need the agent on this VM (vm_observe included) wait behind it; raw vm_key without handle and pid does not, so vm_key alt+y approves the prompt (esc declines) and the call continues"`
 	Background bool   `json:"background,omitempty" jsonschema:"start the command as a job and return at once with its job id; read its state and output with vm_job"`
 }
 type pushIn struct {

@@ -64,3 +64,17 @@ Build `dev-20261011-104854-28c6078`. Evidence: `build/evidence-limits-20261011/`
 Build `dev-20261011-104854-28c6078`. Evidence: `build/savelock-20261011/`.
 
 The session was locked from the guest (`rundll32 user32.dll,LockWorkStation` through `vm_exec`); `vm_status` reported `session.locked: true`. `vm_save` took 4.1 s (`power: saved`). `vm_start` resumed the VM in 9.8 s with `previous_state: saved`, `unlocked: true` and `desktop: usable`, typing the stored unlock password as after any start. `vm_status` then reported `locked: false`, and `vm_exec` answered. Saving a VM with much more memory (the 5-minute job wait) needs a VM memory change and was not run.
+
+## Interactive UAC consent in the guest
+
+Build `dev-20261011-104854-28c6078`. Evidence: `build/uac-20261011/` (`uac*.py`, results, screenshots). Each run changed the guest policy to `ConsentPromptBehaviorAdmin = 2` (prompt for consent on the secure desktop) inside a temp checkpoint and restored the checkpoint afterwards; the policy read `0` again each time.
+
+- **Waiting `vm_exec admin`:** the prompt appeared on the secure desktop. Its buttons read `是` and `否` with no access keys shown, and the focus was on `否`.
+- **Calls during the wait:** while the call waited, `vm_status` reported the agent `busy`, and `vm_observe` waited behind it. One screenshot call returned after 49 s, at the call's timeout.
+- **Why the first answers failed:** the first attempts sent their keys after such a screenshot, so they arrived after the prompt had timed out, and the call returned `elevation_timeout` correctly.
+- **Raw input during the wait:** sent without a screenshot first, a raw `vm_key alt+y` returned in 1.1 s and approved the prompt. The waiting call then ran at high integrity (`High Mandatory Level`).
+- **Documented flow:** the elevated program was started from a `background: true` job with `Start-Process -Verb RunAs`, so the agent stayed free and `vm_observe` showed the prompt in 2 to 4 s.
+  - `alt+y`, `left` then `enter`, and a raw click on `是` each approved it, and the program ran at high integrity.
+  - `esc` declined it: `Start-Process` reported "The operation was canceled by the user", and nothing ran.
+- **Documentation added:** the queueing during a waiting admin call was undocumented. The `admin` parameter and 5.5 now describe it and name the raw answer.
+- **Not run:** a mismatched stored unlock password. It needs the user's Credential Manager entry changed.

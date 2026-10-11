@@ -34,6 +34,8 @@ A non-zero exit code is not a tool error. An empty `command` or an unknown `shel
 
 `admin` = `true` runs the command elevated. UAC may ask for consent or administrator credentials; waiting for it counts toward `timeout_ms`.
 
+- While the call waits for a consent prompt it holds the VM's agent connection, so other calls that need the agent wait behind it (see 1.3), `vm_observe` included (it lists the windows), and `vm_status` reports the agent `busy`. Raw input does not use the agent and goes through at once: `vm_key alt+y` (or `left` then `enter`) approves the prompt on the secure desktop and the call continues; `esc` declines it. On Win10 with the consent prompt on the secure desktop, `alt+y` approved it and the command ran at high integrity. To look at the prompt first, start the elevated program from a `background: true` job instead, which returns at once (see the `elevation_timeout` next below).
+
 - A hidden, ordinary launcher process requests elevation of a one-shot worker. The launcher can be stopped even while UAC is waiting, leaving the agent available for the next request.
 - The worker receives the command over a random, single-use local named pipe. It verifies the pipe server's PID and the original agent process's creation time. A late UAC approval after cancellation or timeout cannot retrieve the expired command.
 - `cwd` defaults to the agent's working directory. `cmd` uses a temporary `%TEMP%\hh-admin-*.cmd` wrapper to select UTF-8 before a nested `cmd /d /s /c` parses the command. PowerShell uses a temporary `%TEMP%\hh-admin-*.ps1` file with a UTF-8 BOM, preserving support for long scripts. Both files are deleted afterwards. Explicit `exit N` is preserved; for PowerShell, a failed last statement otherwise returns exit code 1.
