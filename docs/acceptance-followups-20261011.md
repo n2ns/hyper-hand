@@ -58,3 +58,9 @@ Build `dev-20261011-104854-28c6078`. Evidence: `build/evidence-limits-20261011/`
 
 - **Both limits:** one task made 120 full-resolution screenshots (`vm_observe`, 367 MiB of PNG in total), then 2010 `vm_status` calls, then `vm_evidence`. The export held 2000 calls, the newest, and reported `omitted: {calls: 130, screenshots: 120}`: the 130 oldest calls held all 120 screenshots, each counted once. The zip was 42 KB and took 4.1 s.
 - **Screenshot limit alone:** another task made 60 screenshots (183 MiB) and exported. It kept 60 calls and the newest 41 screenshots (about 125 MiB) and reported `omitted: {calls: 0, screenshots: 19}`. The zip was 131 MB and took 2.3 s.
+
+## Saving a VM whose session is locked
+
+Build `dev-20261011-104854-28c6078`. Evidence: `build/savelock-20261011/`.
+
+The session was locked from the guest (`rundll32 user32.dll,LockWorkStation` through `vm_exec`); `vm_status` reported `session.locked: true`. `vm_save` took 4.1 s (`power: saved`). `vm_start` resumed the VM in 9.8 s with `previous_state: saved`, `unlocked: true` and `desktop: usable`, typing the stored unlock password as after any start. `vm_status` then reported `locked: false`, and `vm_exec` answered. Saving a VM with much more memory (the 5-minute job wait) needs a VM memory change and was not run.
