@@ -65,6 +65,12 @@ func registerBatch(d *deps) {
 		if err := checkBatch(d, in); err != nil {
 			return nil, err
 		}
+		// Resolve the VM once: an unknown VM is refused before any step, and the steps and the result use its name.
+		v, err := d.raw.Find(in.VM)
+		if err != nil {
+			return nil, vmErr(err)
+		}
+		in.VM = v.Name
 		var task *taskState
 		if t, ok := ctx.Value(taskContextKey{}).(*taskState); ok {
 			task = t

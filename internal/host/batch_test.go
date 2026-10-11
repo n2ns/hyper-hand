@@ -175,6 +175,28 @@ func TestBatchRefusesBadStructureBeforeAnyStep(t *testing.T) {
 	}
 }
 
+// The batch resolves its VM once: the result names the VM as Hyper-V does, and an unknown VM is refused before any
+// step runs.
+func TestBatchResolvesItsVM(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rec := &execRecorder{}
+	cs, _ := connectTools(t, ctx, newFakeAgentBackend(rec.respond))
+	step := []any{map[string]any{"tool": "vm_exec", "args": map[string]any{"command": "a"}}}
+	var out batchOut
+	callJSON(t, ctx, cs, "vm_batch", map[string]any{"vm": "win10", "steps": step}, &out)
+	if out.VM != "Win10" || out.Completed != 1 {
+		t.Errorf("batch on win10: %+v", out)
+	}
+	e := callRefused(t, ctx, cs, "vm_batch", map[string]any{"vm": "Nope", "steps": step})
+	if e["error"] != codeInvalidArgument || e["steps"] != nil || !strings.Contains(e["next"].(string), "vm_list") {
+		t.Errorf("unknown VM: %v", e)
+	}
+	if got := rec.seen(); len(got) != 1 {
+		t.Errorf("commands %q", got)
+	}
+}
+
 func TestBatchStepsUseTheBatchTaskForOwnership(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

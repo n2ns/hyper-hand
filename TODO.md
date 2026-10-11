@@ -70,8 +70,11 @@ Record the exact source/build, environment, expected behavior and independent ev
 - [ ] **Control-search performance:** compare three samples per operation on the same 2,234-node Win10 fixture, then repeat AutoCAD and dynamic-control acceptance. The visible-control rectangle hint with strict runtime identity verification is installed; the maintained-package race suite and vet passed. Installed acceptance remains incomplete after full-tree UIA timeouts before the hint benchmarks; investigate their cause before continuing. The earlier element-cache experiment was rejected after a VM performance regression. See the [performance record](docs/control-search-performance-20261010.md).
 - [ ] **Unresponsive applications:** hung UI threads passed after a fix (see the [acceptance record](docs/acceptance-gaps-20261011.md#hung-ui-thread)); AutoCAD regeneration remains. UIA helper/host timeouts already exist (10/12 seconds); only add further window-message timeout handling if an actual unbounded path is identified.
 - [ ] **Blocked graceful shutdown:** use an unsaved disposable document to block shutdown; verify that failure does not silently force power-off and the document remains recoverable. No power-off passed; the guest was left in a pending sign-out and the document was not recoverable (see the [acceptance record](docs/acceptance-gaps-20261011.md#blocked-graceful-shutdown)); needs a product decision.
-- [ ] **Production-only checkpoints:** prevent fallback to Standard; verify reported kind, disk restoration, actual power state, `start: false`, default startup, reconnection and cleanup. Standard memory/disk restore has already passed.
-- [ ] **Long checkpoint merges:** exercise the timeout boundary and report any merge still running without claiming completion or automatically replaying deletion.
+- [ ] **Production-only checkpoints:** prevent fallback to Standard; verify reported kind, disk restoration, actual power state, `start: false`, default startup, reconnection and cleanup. Standard memory/disk restore has already passed. Blocked on 2026-10-11: `Win10` uses `Standard`, HyperHand has no tool to change the setting and the developer account has no Hyper-V administrator rights; the user decides which to provide.
+- [ ] **Long checkpoint merges:** exercise the timeout boundary and report any merge still running without claiming completion or automatically replaying deletion. Blocked on 2026-10-11: a merge reaching the 15-minute wait cannot be produced in a test; it needs a test-only shorter timeout (user decision).
+- [ ] **Hyper-V keyboard into the Run dialog:** with the agent gone, a 248-character check command with parentheses and `&` typed by `vm_type` did not run, while the same checks as three shorter commands did (see the [acceptance record](docs/acceptance-gaps-20261011.md#not-verified)). Isolate the cause (length, a character, or timing) before relying on long raw-keyboard commands.
+- [ ] **Save at scale:** `vm_save` of a VM with much more memory (the 5-minute job wait) and a session that locks while saved or right after resume; `Win10` saved in 3.6 s and stayed unlocked.
+- [ ] **Evidence journal limits on the installed host:** 2000 calls and 128 MiB of screenshots, with the dropped counts in `omitted`; covered by unit tests only.
 - [ ] **Interactive UAC and unlock failures:** test consent approval/cancellation and mismatched stored credentials. Existing elevation acceptance used a no-consent administrator policy.
 
 Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining-coverage), [2026-10-10 limits](docs/acceptance-20261010.md#evidence-and-limits), and [semantic acceptance](docs/semantic-acceptance-20261010.md).
@@ -79,6 +82,8 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 ## 4. Release and verification workflow
 
 - [ ] Publish a release (the user's decision; a `0.3.0` candidate package was built and verified, see the [record](docs/release-candidate-20261011.md)) containing the current AI-oriented tool surface, the new guest protocol generation, semantic actions, directory mirroring, UI waits/assertions, and control search/subtree observation. They remain under [Unreleased](CHANGELOG.md#unreleased). Migration notes are in `CHANGELOG.md` and packaged and installed versions and hashes were verified for the candidate; turn `[Unreleased]` into the version's section and tag.
+- [ ] After the release is installed, run `vm_update_agent` on `Win10-PipeSifu`; it was not touched in the 2026-10-11 run.
+- [ ] Three desktop hit-test tests of `internal/agent` (`TestWindowAt`, `TestFocusedHelper`, `TestControlHintNativeIdentityAndFallback`) fail whenever the host desktop is locked (their hits land on `LockApp.exe`), so `go test -race ./...` passes only on an unlocked desktop. Decide whether they should skip on a locked desktop or stay as they are.
 
 ## 5. Product scope decisions
 
@@ -87,6 +92,9 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 - [ ] Decide whether unattended first sign-in belongs in scope. Current unlock support requires an already signed-in, locked session with the agent running.
 - [ ] Decide whether UWP/MSIX discovery and launch support is needed beyond current Win32 Start Menu/App Paths discovery.
 - [ ] Decide whether guest tray text should be standardized in English, then verify the chosen language in the actual UI.
+- [ ] Decide whether the test VMs' unlock passwords should have at least 4 characters. `vm_evidence` does not redact secrets shorter than 4 characters (they would garble the record), and `Win10`'s stored password has 1 character, so it appears in exported evidence (counted in `skipped_short_secrets`).
+
+Known behavior kept on purpose: an action marks itself as mutating before it asks the agent to activate the target, so even a refusal before anything changed (such as `target_not_responding` for a hung window) makes older observations stale and the caller observes again. Activation that fails part-way can change the foreground, so the conservative invalidation stays.
 
 ## 6. Completed capabilities to keep out of the backlog
 
