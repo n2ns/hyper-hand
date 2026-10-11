@@ -443,6 +443,14 @@ func TestObserveUIATimeout(t *testing.T) {
 	if _, ok := out["controls"]; ok {
 		t.Errorf("controls present after a timeout: %v", out["controls"])
 	}
+	// The agent reports the window as responding: the tree was only too large or slow.
+	b.controls = func(proto.ControlsArgs) (proto.ControlsResult, error) {
+		return proto.ControlsResult{}, errors.New("UI Automation interrupted: context deadline exceeded (window responding)")
+	}
+	out, _, _ = observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "controls": true})
+	if out["stale_risk"] != "control tree not read within 10 s although the window responds: lower max_depth or max_nodes, or use vm_find_controls" {
+		t.Errorf("responding stale_risk %v", out["stale_risk"])
+	}
 	if _, ok := out["agent"]; ok {
 		t.Error("agent reported offline on a UIA timeout")
 	}

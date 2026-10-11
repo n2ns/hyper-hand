@@ -525,6 +525,8 @@ func (a *action) controlAction(o *observation, w proto.WindowInfo, node proto.Co
 	}
 	msg := err.Error()
 	switch {
+	case strings.Contains(msg, "(window responding)"):
+		return r, refuse(codeUIATimeout, "the window responds, but UI Automation did not finish the action within 10 s (a large or slow control tree around the control); the action may or may not have happened: observe the window and check the control before repeating it, or use vm_click with this index", nil, "window %s did not perform %s within %v: %v", describe(w), action, controlActionTimeout, err)
 	case errors.Is(err, context.DeadlineExceeded) || (ctx.Err() != nil && a.ctx.Err() == nil) ||
 		strings.Contains(msg, "UI Automation interrupted") || strings.Contains(msg, "timed out"):
 		return r, refuse(codeTargetNotResponding, "call vm_observe on the window to see whether it answers; close it with vm_key alt+f4 or vm_exec if it hangs", nil, "window %s did not perform %s within %v", describe(w), action, controlActionTimeout)
