@@ -323,6 +323,7 @@ func TestControlsNativeListItemSelect(t *testing.T) {
 
 // The focused-element helper answers within its budget; what has focus on the test machine is not under our control.
 func TestFocusedHelper(t *testing.T) {
+	requireUnlockedDesktop(t)
 	ctx, cancel := context.WithTimeout(context.Background(), focusedTimeout)
 	defer cancel()
 	reply, err := runHelper(ctx, controlsTestCommand(t, ctx, "serve"), helperRequest{Focused: true})

@@ -78,7 +78,6 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 
 ## 4. Release and verification workflow
 
-- [ ] Three desktop hit-test tests of `internal/agent` (`TestWindowAt`, `TestFocusedHelper`, `TestControlHintNativeIdentityAndFallback`) fail whenever the host desktop is locked (their hits land on `LockApp.exe`), so `go test -race ./...` passes only on an unlocked desktop. Decide whether they should skip on a locked desktop or stay as they are.
 
 ## 5. Product scope decisions
 
@@ -116,6 +115,7 @@ Known behavior kept on purpose: an action marks itself as mutating before it ask
 - [x] Production-only checkpoints: `vm_set_checkpoint_type` switches the VM setting; on Win10 a ProductionOnly checkpoint saved no memory, `vm_restore start: false` left the VM off, `vm_start` reconnected after the cold start, the disk was restored, default restore started the VM and `vm_end_turn` cleaned up. See the [acceptance record](docs/production-checkpoint-acceptance-20261011.md).
 - [x] Checkpoint `kind` and `holds_memory`: Hyper-V gives standard and production checkpoints the same snapshot type, so `kind` reports it as is and `holds_memory` (state `running` or `saved`) tells whether restoring brings the programs back. See the [contract](docs/features/vm-checkpoints.md#33-checkpoints).
 - [x] Release 0.3.0 published 2026-10-11 (tag `v0.3.0` at `82e18fe`, GitHub Release Latest); installed on the host from the release zip (hashes equal, server reports 0.3.0) and the agents of `Win10` and `Win10-PipeSifu` updated to 0.3.0.
+- [x] Agent desktop tests on a locked host: `TestWindowAt`, `TestFocusedHelper` and `TestControlHintNativeIdentityAndFallback` skip with a reason while the session is locked (`WTSSessionInfoEx`; Windows cannot be unlocked by a program, decision 2026-10-11) and run as before otherwise. The skip itself was not exercised on a locked host.
 - [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; interruption, expiry and old-agent coverage passed (section 1); release remains in section 4.
 
 The old title selectors remain removed. UI waits use HWND/PID, exact control properties or observation-bound runtime identity; they do not restore the legacy title-based interface.

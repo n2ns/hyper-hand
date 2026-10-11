@@ -28,7 +28,7 @@ go test -race ./cmd/... ./internal/...
 python -m unittest discover -s client
 ```
 
-`go test -race ./...` also works: `build\go.mod` makes the otherwise ignored `build\` directory a separate module, so the old Go experiments and evidence kept there stay out of package discovery. Keep that file.
+`go test -race ./...` also works: `build\go.mod` makes the otherwise ignored `build\` directory a separate module, so the old Go experiments and evidence kept there stay out of package discovery. Keep that file. Three agent tests that hit-test or read UI Automation focus on the host desktop (`TestWindowAt`, `TestFocusedHelper`, `TestControlHintNativeIdentityAndFallback`) are skipped while the host session is locked: Windows lets no program unlock it. Run them on an unlocked desktop (`go test -v` lists skips).
 
 ## Install a development build
 
