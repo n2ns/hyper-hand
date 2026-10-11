@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"hyperhand/internal/hyperv"
@@ -54,7 +55,7 @@ func operationTimeout(op string) time.Duration {
 	switch op {
 	case "copy", "checkpoint_create", "checkpoint_restore", "checkpoint_delete", "checkpoint_rename":
 		return 15 * time.Minute
-	case "start", "stop", "pause", "checkpoints":
+	case "start", "stop", "pause", "checkpoints", "checkpoint_type":
 		return time.Minute
 	case "save":
 		return 6 * time.Minute
@@ -126,7 +127,7 @@ func validateRequest(r request, size int64) error {
 		return errors.New("unexpected broker payload")
 	}
 	switch r.Op {
-	case "list", "find", "start", "stop", "save", "pause", "shutdown", "checkpoints", "checkpoint_create", "checkpoint_restore", "checkpoint_delete", "checkpoint_rename", "screenshot", "keys", "text", "dial":
+	case "list", "find", "start", "stop", "save", "pause", "shutdown", "checkpoints", "checkpoint_create", "checkpoint_restore", "checkpoint_delete", "checkpoint_rename", "checkpoint_type", "screenshot", "keys", "text", "dial":
 	case "click":
 		if r.Button < 1 || r.Button > 3 {
 			return errors.New("invalid mouse button")
@@ -148,6 +149,9 @@ func validateRequest(r request, size int64) error {
 		}
 	default:
 		return fmt.Errorf("unsupported broker operation %q", r.Op)
+	}
+	if r.Op == "checkpoint_type" && !slices.Contains(hyperv.CheckpointTypes, r.Name) {
+		return errors.New("checkpoint type must be Standard, Production, ProductionOnly or Disabled")
 	}
 	if (r.Op == "checkpoint_create" || r.Op == "checkpoint_rename") && r.Name == "" {
 		return errors.New("checkpoint name required")

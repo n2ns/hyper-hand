@@ -428,6 +428,32 @@ func TestDeleteAfterListNoCheckpoint(t *testing.T) {
 	}
 }
 
+func TestSetCheckpointType(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	b := &vmToolsBackend{vms: []hyperv.VM{{Name: "Win10", ID: "id-a", State: "Running"}}}
+	cs, _ := connectTools(t, ctx, b)
+	var out checkpointTypeOut
+	callJSON(t, ctx, cs, "vm_set_checkpoint_type", map[string]any{"vm": "win10", "type": "productiononly"}, &out)
+	if out != (checkpointTypeOut{VM: "Win10", CheckpointType: "ProductionOnly", Previous: "Standard"}) || !reflect.DeepEqual(b.typeSets, []string{"Win10=ProductionOnly"}) {
+		t.Fatalf("set: %+v, calls %v", out, b.typeSets)
+	}
+	var list checkpointsOut
+	callJSON(t, ctx, cs, "vm_checkpoints", nil, &list)
+	if list.CheckpointType != "ProductionOnly" {
+		t.Errorf("vm_checkpoints after the change: %s", list.CheckpointType)
+	}
+	// The same setting again is not written.
+	callJSON(t, ctx, cs, "vm_set_checkpoint_type", map[string]any{"type": "ProductionOnly"}, &out)
+	if out.Previous != "ProductionOnly" || len(b.typeSets) != 1 {
+		t.Errorf("unchanged: %+v, calls %v", out, b.typeSets)
+	}
+	e := callRefused(t, ctx, cs, "vm_set_checkpoint_type", map[string]any{"type": "Snapshot"})
+	if e["error"] != codeInvalidArgument || !strings.Contains(e["next"].(string), "ProductionOnly") || len(b.typeSets) != 1 {
+		t.Errorf("unknown type: %v", e)
+	}
+}
+
 // deleteCounter counts DeleteCheckpoint calls.
 type deleteCounter struct {
 	*vmToolsBackend

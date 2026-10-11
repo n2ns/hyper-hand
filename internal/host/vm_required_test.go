@@ -132,6 +132,10 @@ func (b *twoVMBackend) Pause(name string) error {
 	b.record("Pause", name)
 	return b.setState(name, "Paused")
 }
+func (b *twoVMBackend) SetCheckpointType(name, t string) error {
+	b.record("SetCheckpointType", name)
+	return nil
+}
 func (b *twoVMBackend) Shutdown(name string) error {
 	b.record("Shutdown", name)
 	return b.setState(name, "Off")

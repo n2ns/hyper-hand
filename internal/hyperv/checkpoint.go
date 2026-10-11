@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -91,6 +92,20 @@ func parseCheckpoints(out []byte) (CheckpointList, error) {
 		}
 	}
 	return l, nil
+}
+
+// CheckpointTypes are the values of Set-VM -CheckpointType, which decides what CreateCheckpoint creates.
+var CheckpointTypes = []string{"Standard", "Production", "ProductionOnly", "Disabled"}
+
+// SetCheckpointType sets the VM's checkpoint setting to t, one of CheckpointTypes (Set-VM -CheckpointType; allowed
+// while the VM runs).
+// https://learn.microsoft.com/en-us/powershell/module/hyper-v/set-vm
+func SetCheckpointType(vm, t string) error {
+	if !slices.Contains(CheckpointTypes, t) {
+		return fmt.Errorf("unknown checkpoint type %q", t)
+	}
+	_, err := vmScript(vm, `Set-VM -VM $vm -CheckpointType `+psq(t))
+	return err
 }
 
 // CreateCheckpoint creates a checkpoint named name (the VM's CheckpointType decides its kind) and returns it; its

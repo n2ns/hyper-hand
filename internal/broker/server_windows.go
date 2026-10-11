@@ -282,6 +282,8 @@ func (s *server) handle(c net.Conn) {
 		err = hyperv.DeleteCheckpoint(r.VM, r.ID, r.Subtree)
 	case "checkpoint_rename":
 		err = hyperv.RenameCheckpoint(r.VM, r.ID, r.Name)
+	case "checkpoint_type":
+		err = hyperv.SetCheckpointType(r.VM, r.Name)
 	case "screenshot":
 		payload, out.Width, out.Height, err = screenshotReady(s.ctx, r.VM)
 	case "click":

@@ -22,6 +22,7 @@ type Backend interface {
 	RestoreCheckpoint(vm, id string) error
 	DeleteCheckpoint(vm, id string, subtree bool) error // one checkpoint (children re-parented) or its whole subtree
 	RenameCheckpoint(vm, id, name string) error
+	SetCheckpointType(vm, t string) error // one of hyperv.CheckpointTypes
 	Screenshot(string) ([]byte, int, int, error)
 	Click(vm string, x, y, button, count int, modifiers []string) error
 	Drag(vm string, x1, y1, x2, y2 int, modifiers []string) error
