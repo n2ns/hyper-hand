@@ -331,7 +331,7 @@ func checkIntegrity(ws *proto.WindowsResult, w proto.WindowInfo) error {
 	if t == 0 || ag == 0 || t <= ag {
 		return nil
 	}
-	return refuse(codeIntegrityMismatch, "launch the application without admin, or use vm_launch with admin:true", map[string]any{"integrity": w.Integrity, "agent_integrity": ws.AgentIntegrity}, "window %s runs at %s integrity, above the agent's %s", describe(w), w.Integrity, ws.AgentIntegrity)
+	return refuse(codeIntegrityMismatch, "the agent cannot send input to it: launch the application without admin, or act on it with raw input, which Windows does not filter: vm_click, vm_drag or vm_scroll (delta_y only; delta_x goes through the agent) without observation_id at screen pixels, and vm_key without handle and pid", map[string]any{"integrity": w.Integrity, "agent_integrity": ws.AgentIntegrity}, "window %s runs at %s integrity, above the agent's %s", describe(w), w.Integrity, ws.AgentIntegrity)
 }
 
 // windowTarget runs steps 3 and 4 for the group root w (an observation's window): activation, then enabled and
@@ -533,7 +533,13 @@ func (a *action) controlAction(o *observation, w proto.WindowInfo, node proto.Co
 	case strings.HasPrefix(msg, "element not found"):
 		return r, refuse(codeStaleElement, "call vm_observe with controls: true and use an index from its tree", nil, "control [%d] %s %q of observation %s no longer exists: %v", node.Index, proto.ControlTypeName(node.ControlType), node.Name, o.ID, err)
 	case strings.HasPrefix(msg, "unsupported pattern"):
-		return r, refuse(codeUnsupportedPattern, "use vm_set_value for SetValue, vm_invoke for another supported action, or vm_click with this index", map[string]any{"supported": supportedControlActions(msg, node)}, "control [%d] %s %q does not support %s", node.Index, proto.ControlTypeName(node.ControlType), node.Name, action)
+		supported := supportedControlActions(msg, node)
+		next := "use vm_set_value for SetValue, vm_invoke for another supported action, or vm_click with this index"
+		if len(supported) == 0 {
+			// Custom-drawn controls (AutoCAD's drawing area) offer no UI Automation action at all.
+			next = "the control offers no UI Automation action (custom-drawn): use vm_click with this index, or vm_type or vm_key to its window"
+		}
+		return r, refuse(codeUnsupportedPattern, next, map[string]any{"supported": supported}, "control [%d] %s %q does not support %s", node.Index, proto.ControlTypeName(node.ControlType), node.Name, action)
 	}
 	return r, agentRequired(err)
 }

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `integrity_mismatch` suggested `vm_launch with admin:true`, which starts the program elevated and so causes the refusal. Its `next` now names what works on an elevated window: raw input (`vm_click`, `vm_drag`, `vm_scroll` with `delta_y` without `observation_id`, `vm_key` without `handle` and `pid`), which Windows does not filter; on Win10 a raw click closed AutoCAD's elevated licensing dialog after the targeted click had been refused.
+- `unsupported_pattern` on a control with no UI Automation action at all (AutoCAD's custom-drawn drawing area, `supported: []`) no longer suggests `vm_set_value` or `vm_invoke`; `next` offers `vm_click` with the index or keyboard input.
 - A UI Automation read that timed out on a window that still responds (AutoCAD 2015's main window: about 1,400 nodes at a few hundred per second) was reported as `target_not_responding` with a `next` suggesting to end the program. The agent now says whether the window is hung: a responding window gives the new code `ui_automation_timeout` (and for `vm_observe` a `stale_risk` saying so) with a `next` asking for lower limits or a subtree search; a hung one stays `target_not_responding`. Requires the updated guest agent (`vm_update_agent`); older agents keep the previous reports.
 
 ### Changed
