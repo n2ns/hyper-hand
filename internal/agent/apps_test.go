@@ -83,6 +83,30 @@ func TestAppsInvalidLimitAndCancellation(t *testing.T) {
 	}
 }
 
+// An 8.3 short path and the long path of the same executable have the same running key.
+func TestRunningPathKeyShortAndLong(t *testing.T) {
+	long := filepath.Join(t.TempDir(), "HyperHand long directory name", "Some Application.exe")
+	if err := os.MkdirAll(filepath.Dir(long), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(long, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := windows.UTF16PtrFromString(long)
+	buf := make([]uint16, windows.MAX_LONG_PATH)
+	n, err := windows.GetShortPathName(p, &buf[0], uint32(len(buf)))
+	short := windows.UTF16ToString(buf[:n])
+	if err != nil || strings.EqualFold(short, long) {
+		t.Skip("the volume has no 8.3 names")
+	}
+	if runningPathKey(short) != runningPathKey(long) {
+		t.Errorf("short %q -> %q, long %q -> %q", short, runningPathKey(short), long, runningPathKey(long))
+	}
+	if missing := `C:\does not exist\x.exe`; runningPathKey(missing) != appPathKey(missing) {
+		t.Errorf("missing path changed: %q", runningPathKey(missing))
+	}
+}
+
 // Creates and reads only a temporary shortcut; the target is never launched. Its name, working directory and
 // arguments hold characters outside every ANSI code page (Ŵ, an emoji) besides Chinese, so the round trip also holds on
 // a guest whose code page cannot represent them.
@@ -130,7 +154,10 @@ func TestAppsShortcutRoundTrip(t *testing.T) {
 		t.Fatalf("result: %+v, %v", r, err)
 	}
 	app := r.Apps[0]
-	if app.Name != "测试 应用 Ŵ😀" || !strings.EqualFold(app.Launch.Path, exe) || app.Launch.Cwd != cwd || !reflect.DeepEqual(app.Launch.Args, wantArgs) {
+	// The shell link stores the target's long path; exe is short when TEMP is (as on CI runners), so compare files.
+	got, gotErr := os.Stat(app.Launch.Path)
+	want, wantErr := os.Stat(exe)
+	if app.Name != "测试 应用 Ŵ😀" || gotErr != nil || wantErr != nil || !os.SameFile(got, want) || app.Launch.Cwd != cwd || !reflect.DeepEqual(app.Launch.Args, wantArgs) {
 		t.Fatalf("roundtrip changed launch: %+v", app)
 	}
 	r.Apps = append(r.Apps, proto.AppInfo{Launch: proto.AppLaunch{Path: filepath.Join(dir, filepath.Base(exe))}})

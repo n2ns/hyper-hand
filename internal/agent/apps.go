@@ -135,6 +135,18 @@ func appPathKey(path string) string {
 	return strings.ToLower(filepath.Clean(strings.ReplaceAll(path, "/", `\`)))
 }
 
+// runningPathKey is appPathKey of path's long form, so that a process started from an 8.3 short path and a shortcut
+// target stored in long form (or the reverse) match the same executable. Paths that cannot be expanded stay as given.
+func runningPathKey(path string) string {
+	if p, err := windows.UTF16PtrFromString(path); err == nil && path != "" {
+		buf := make([]uint16, windows.MAX_LONG_PATH)
+		if n, err := windows.GetLongPathName(p, &buf[0], uint32(len(buf))); err == nil && n > 0 && int(n) < len(buf) {
+			path = windows.UTF16ToString(buf[:n])
+		}
+	}
+	return appPathKey(path)
+}
+
 func appPaths(ctx context.Context) appSourceResult {
 	r := appSourceResult{}
 	for _, hive := range []struct {
@@ -411,7 +423,7 @@ func attachAppProcesses(ctx context.Context, apps []proto.AppInfo) error {
 		r, _, _ := pQueryFullProcessImageName.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&name[0])), uintptr(unsafe.Pointer(&size)))
 		windows.CloseHandle(h)
 		if r != 0 {
-			paths[p.ProcessID] = appPathKey(windows.UTF16ToString(name[:size]))
+			paths[p.ProcessID] = runningPathKey(windows.UTF16ToString(name[:size]))
 		} else {
 			unreadable++
 		}
@@ -433,7 +445,7 @@ func attachAppProcesses(ctx context.Context, apps []proto.AppInfo) error {
 		}
 	}
 	for i := range apps {
-		if ws, ok := byPath[appPathKey(apps[i].Launch.Path)]; ok {
+		if ws, ok := byPath[runningPathKey(apps[i].Launch.Path)]; ok {
 			apps[i].Running = true
 			apps[i].Windows = ws
 		}
