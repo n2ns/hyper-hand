@@ -204,7 +204,16 @@ func collectControls(a proto.ControlsArgs) (proto.ControlsResult, error) {
 		}
 		defer e.release()
 	}
-	r, err := walkControls(e, a)
+	walkRoot := e
+	if uiaCacheTree {
+		c, err := s.cacheSubtree(e, false)
+		if err != nil {
+			return proto.ControlsResult{}, err
+		}
+		defer c.release()
+		walkRoot = c
+	}
+	r, err := walkControls(walkRoot, a)
 	if err != nil {
 		return proto.ControlsResult{}, err
 	}
@@ -444,9 +453,24 @@ var valuePatternIndex = patternFor("SetValue")
 
 type nativeControl struct {
 	element, walker *ole.IUnknown
+	cached, partial bool // partial: only the search selectors are cached
+	siblings        *cachedSiblings
 }
 
-func (e *nativeControl) release() { e.element.Release() }
+func (e *nativeControl) release() {
+	e.element.Release()
+	if e.siblings != nil {
+		e.siblings.array.Release()
+	}
+}
+
+// slot maps a get_CurrentX slot to get_CachedX on a cached element.
+func (e *nativeControl) slot(current int) int {
+	if e.cached {
+		return current + uiaCachedOffset
+	}
+	return current
+}
 func (e *nativeControl) relative(slot int) (controlElement, error) {
 	var out *ole.IUnknown
 	if err := uiaCall(e.walker, slot, uintptr(unsafe.Pointer(e.element)), uintptr(unsafe.Pointer(&out))); err != nil {
@@ -457,16 +481,26 @@ func (e *nativeControl) relative(slot int) (controlElement, error) {
 	}
 	return &nativeControl{element: out, walker: e.walker}, nil
 }
-func (e *nativeControl) first() (controlElement, error) { return e.relative(uiaFirstChild) }
-func (e *nativeControl) next() (controlElement, error)  { return e.relative(uiaNextSibling) }
+func (e *nativeControl) first() (controlElement, error) {
+	if e.cached {
+		return e.cachedFirst()
+	}
+	return e.relative(uiaFirstChild)
+}
+func (e *nativeControl) next() (controlElement, error) {
+	if e.cached {
+		return e.cachedNext()
+	}
+	return e.relative(uiaNextSibling)
+}
 func (e *nativeControl) integer(slot int) (int32, error) {
 	var out int32
-	err := uiaCall(e.element, slot, uintptr(unsafe.Pointer(&out)))
+	err := uiaCall(e.element, e.slot(slot), uintptr(unsafe.Pointer(&out)))
 	return out, err
 }
 func (e *nativeControl) text(slot int) (string, bool, error) {
 	var out *int16
-	err := uiaCall(e.element, slot, uintptr(unsafe.Pointer(&out)))
+	err := uiaCall(e.element, e.slot(slot), uintptr(unsafe.Pointer(&out)))
 	if out != nil {
 		defer ole.SysFreeString(out)
 	}
@@ -492,7 +526,11 @@ func bstrText(s *int16) (string, bool, error) {
 // property reads a UIA property through GetCurrentPropertyValue; the caller clears the VARIANT.
 func (e *nativeControl) property(id int32) (ole.VARIANT, error) {
 	var v ole.VARIANT
-	err := uiaCall(e.element, uiaGetPropertyValue, uintptr(id), uintptr(unsafe.Pointer(&v)))
+	slot := uiaGetPropertyValue
+	if e.cached {
+		slot = uiaGetCachedProperty
+	}
+	err := uiaCall(e.element, slot, uintptr(id), uintptr(unsafe.Pointer(&v)))
 	return v, err
 }
 
@@ -500,7 +538,11 @@ func (e *nativeControl) property(id int32) (ole.VARIANT, error) {
 // not implement; those are returned as a reserved VT_UNKNOWN value instead.
 func (e *nativeControl) stateProperty(id int32) (ole.VARIANT, error) {
 	var v ole.VARIANT
-	err := uiaCall(e.element, uiaGetPropertyValueEx, uintptr(id), 1, uintptr(unsafe.Pointer(&v)))
+	slot := uiaGetPropertyValueEx
+	if e.cached {
+		slot = uiaGetCachedPropertyEx
+	}
+	err := uiaCall(e.element, slot, uintptr(id), 1, uintptr(unsafe.Pointer(&v)))
 	return v, err
 }
 
@@ -611,6 +653,9 @@ func destroySafeArray(a *safeArray) { pSafeArrayDestroy.Call(uintptr(unsafe.Poin
 
 // runtimeID reads GetRuntimeId (a SAFEARRAY of int32).
 func (e *nativeControl) runtimeID() ([]int32, error) {
+	if e.cached {
+		return e.cachedRuntimeID()
+	}
 	var arr *safeArray
 	if err := uiaCall(e.element, uiaGetRuntimeID, uintptr(unsafe.Pointer(&arr))); err != nil {
 		return nil, err
@@ -707,6 +752,10 @@ func (e *nativeControl) findRuntimeID(want string) (*nativeControl, error) {
 }
 
 func (e *nativeControl) info() (proto.ControlInfo, bool, bool, error) {
+	if e.partial {
+		live := nativeControl{element: e.element, walker: e.walker}
+		return live.info()
+	}
 	var n proto.ControlInfo
 	password, err := e.integer(uiaPassword)
 	if err != nil {
@@ -731,7 +780,7 @@ func (e *nativeControl) info() (proto.ControlInfo, bool, bool, error) {
 		return n, false, false, err
 	}
 	n.Offscreen = off != 0
-	if err := uiaCall(e.element, uiaBounds, uintptr(unsafe.Pointer(&n.Rect))); err != nil {
+	if err := uiaCall(e.element, e.slot(uiaBounds), uintptr(unsafe.Pointer(&n.Rect))); err != nil {
 		return n, false, false, err
 	}
 	cut := false

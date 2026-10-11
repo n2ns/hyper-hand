@@ -36,7 +36,16 @@ func collectFindControls(a proto.FindControlsArgs) (proto.FindControlsResult, er
 		}
 		defer e.release()
 	}
-	r, err := searchControls(e, a)
+	searchRoot := e
+	if uiaCacheTree {
+		c, err := s.cacheSubtree(e, true)
+		if err != nil {
+			return proto.FindControlsResult{}, err
+		}
+		defer c.release()
+		searchRoot = c
+	}
+	r, err := searchControls(searchRoot, a)
 	if err != nil {
 		return proto.FindControlsResult{}, err
 	}
