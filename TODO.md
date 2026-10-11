@@ -78,8 +78,6 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 
 ## 4. Release and verification workflow
 
-- [ ] Publish 0.3.0 (version chosen 2026-10-11; the changes are under [0.3.0](CHANGELOG.md#030---2026-10-11) with migration notes): push the `v0.3.0` tag, then install the release and run `vm_update_agent` on every VM. The candidate package verified earlier ([record](docs/release-candidate-20261011.md)) predates later commits; the tag build replaces it.
-- [ ] After the release is installed, run `vm_update_agent` on `Win10-PipeSifu`; it was not touched in the 2026-10-11 run.
 - [ ] Three desktop hit-test tests of `internal/agent` (`TestWindowAt`, `TestFocusedHelper`, `TestControlHintNativeIdentityAndFallback`) fail whenever the host desktop is locked (their hits land on `LockApp.exe`), so `go test -race ./...` passes only on an unlocked desktop. Decide whether they should skip on a locked desktop or stay as they are.
 
 ## 5. Product scope decisions
@@ -117,6 +115,7 @@ Known behavior kept on purpose: an action marks itself as mutating before it ask
 - [x] Blocked graceful shutdown: no power-off (Win10 acceptance); the guest may stay in a pending sign-out, which `vm_shutdown` now reports with the way out. Document recovery is not promised: it is Windows behavior (decision 2026-10-11). See the [acceptance record](docs/acceptance-gaps-20261011.md#blocked-graceful-shutdown).
 - [x] Production-only checkpoints: `vm_set_checkpoint_type` switches the VM setting; on Win10 a ProductionOnly checkpoint saved no memory, `vm_restore start: false` left the VM off, `vm_start` reconnected after the cold start, the disk was restored, default restore started the VM and `vm_end_turn` cleaned up. See the [acceptance record](docs/production-checkpoint-acceptance-20261011.md).
 - [x] Checkpoint `kind` and `holds_memory`: Hyper-V gives standard and production checkpoints the same snapshot type, so `kind` reports it as is and `holds_memory` (state `running` or `saved`) tells whether restoring brings the programs back. See the [contract](docs/features/vm-checkpoints.md#33-checkpoints).
+- [x] Release 0.3.0 published 2026-10-11 (tag `v0.3.0` at `82e18fe`, GitHub Release Latest); installed on the host from the release zip (hashes equal, server reports 0.3.0) and the agents of `Win10` and `Win10-PipeSifu` updated to 0.3.0.
 - [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; interruption, expiry and old-agent coverage passed (section 1); release remains in section 4.
 
 The old title selectors remain removed. UI waits use HWND/PID, exact control properties or observation-bound runtime identity; they do not restore the legacy title-based interface.
