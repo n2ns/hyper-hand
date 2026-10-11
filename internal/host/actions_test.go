@@ -324,7 +324,7 @@ func TestIntegrityRefusal(t *testing.T) {
 		td := newTestDeps(t, f)
 		id := td.put(options(), 1, nil)
 		r, m := td.call(t, "vm_click", map[string]any{"observation_id": id, "x": 1, "y": 1, "observe_after": "none"})
-		if r.IsError != tt.refused || (tt.refused && (m["error"] != codeIntegrityMismatch || m["next"] != "launch the application without admin, or use vm_launch with admin:true")) {
+		if r.IsError != tt.refused || (tt.refused && (m["error"] != codeIntegrityMismatch || m["next"] != "the agent cannot send input to it: launch the application without admin, or act on it with raw input, which Windows does not filter: vm_click, vm_drag or vm_scroll (delta_y only; delta_x goes through the agent) without observation_id at screen pixels, and vm_key without handle and pid")) {
 			t.Errorf("%s vs %s: %v", tt.target, tt.agent, m)
 		}
 		if tt.refused && td.b.events() != "" {
@@ -523,6 +523,17 @@ func TestSetValue(t *testing.T) {
 			if s, _ := m["supported"].([]any); len(s) != 2 || s[0] != "Invoke" || s[1] != "Expand" {
 				t.Errorf("supported: %v", m["supported"])
 			}
+		}
+	}
+	// A control with no UI Automation action at all (AutoCAD's custom-drawn drawing area): the next step offers only
+	// what can work, not vm_set_value or vm_invoke.
+	{
+		td := newTestDeps(t, controlAgent(proto.ControlActionResult{}, errors.New("unsupported pattern: SetValue; supported: ")))
+		id := td.put(options(), 1, controlNodes())
+		_, m := td.call(t, "vm_set_value", map[string]any{"observation_id": id, "index": 1, "value": "abc"})
+		next, _ := m["next"].(string)
+		if s, _ := m["supported"].([]any); m["error"] != codeUnsupportedPattern || len(s) != 0 || strings.Contains(next, "vm_set_value") || strings.Contains(next, "vm_invoke") || !strings.Contains(next, "vm_click") {
+			t.Errorf("no actions: %v", m)
 		}
 	}
 	// A hung target: the call is bounded and reported as not responding.
