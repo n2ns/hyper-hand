@@ -322,7 +322,7 @@ func registerVM(d *deps) {
 		}
 		return jsonResult(vmState{VM: v.Name, State: state})
 	})
-	addToolIn(d, toolSpec{name: "vm_shutdown", desc: "Shut a VM down normally: ask Windows in the guest to shut down (through the Hyper-V shutdown integration service) and wait up to 3 minutes until the VM is off. Not forced: a program with unsaved work can keep Windows from shutting down, and the tool then fails with the VM still running. Never turns the power off; use vm_turn_off only when the guest cannot shut down.", destructive: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
+	addToolIn(d, toolSpec{name: "vm_shutdown", desc: "Shut a VM down normally: ask Windows in the guest to shut down (through the Hyper-V shutdown integration service) and wait up to 3 minutes until the VM is off. Not forced: a program with unsaved work can keep Windows from shutting down, and the tool then fails with the VM still running, possibly half signed out with the agent gone. Save or close such programs first, or use vm_save to keep the work. Never turns the power off; use vm_turn_off only when the guest cannot shut down.", destructive: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM)
 		if err != nil {
 			return nil, vmErr(err)
