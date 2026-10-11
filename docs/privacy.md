@@ -43,9 +43,9 @@ Host uninstallation preserves user logs, guest files and nonempty service workin
 
 ## Access control
 
-The MCP server has no authentication. Any local process that can reach `127.0.0.1:8770` can control the VMs through all HyperHand tools, including running commands in the guest, copying files between host and guest, and unlocking a locked session with a stored unlock password (without being able to read the password).
+The MCP server needs no authentication by design: it listens only on `127.0.0.1:8770` for the programs on this computer. Any of them can control the VMs through all HyperHand tools, including running commands in the guest, copying files between host and guest, and unlocking a locked session with a stored unlock password (without being able to read the password).
 
-The service's named pipe permits the configured owner, SYSTEM, administrators and the service account. This restricts direct broker access; it does **not** authenticate MCP callers or prevent another local process from using the tray's HTTP endpoint. The service exposes specific Hyper-V operations and the fixed guest socket tunnel, not an arbitrary host command execution endpoint. Guest `vm_exec` still runs in the guest.
+The service's named pipe permits the configured owner, SYSTEM, administrators and the service account. This restricts direct broker access only; MCP callers reach the service through the tray's HTTP endpoint, which needs no authentication. The service exposes specific Hyper-V operations and the fixed guest socket tunnel, not an arbitrary host command execution endpoint. Guest `vm_exec` still runs in the guest.
 
 The tray runs without elevation. The service uses a dedicated virtual account, not LocalSystem, and installation does not add the human user to Hyper-V Administrators. That service account nevertheless has broad Hyper-V management rights, including VM and checkpoint operations. Host UAC settings are not changed.
 

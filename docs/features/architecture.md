@@ -14,7 +14,7 @@ HyperHand consists of two Windows executables.
 - Screen capture, mouse, keyboard, VM state and checkpoints use Hyper-V through the service and work without the guest agent (see 3, 4).
 - Commands, files, clipboard, window focus and waiting go through the guest agent (see 5, 6, 7).
 - The tray requests specific broker operations over a local named pipe whose ACL permits the configured owner, SYSTEM, administrators and the service account. There is no arbitrary host command execution broker operation. Host file reads and writes stay in the ordinary tray process.
-- The MCP HTTP endpoint remains unauthenticated. Its callers can use all exposed tools through the tray; the pipe ACL is not MCP authentication.
+- The MCP HTTP endpoint needs no authentication by design. Its callers can use all exposed tools through the tray; the pipe ACL governs only the tray's access to the service.
 
 ### 1.2 Hyper-V socket
 
