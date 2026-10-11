@@ -85,9 +85,9 @@ func main() {
 	agent.AfterUpdate = restart
 	const cmdQuit = 1
 	items := func(status string) []tray.Item {
-		return []tray.Item{{ID: 2, Text: status, Disabled: true}, {ID: cmdQuit, Text: "退出"}}
+		return []tray.Item{{ID: 2, Text: status, Disabled: true}, {ID: cmdQuit, Text: "Exit"}}
 	}
-	tr := tray.New("HyperHand", items("等待宿主机连接"))
+	tr := tray.New("HyperHand", items("Waiting for the host"))
 	tr.OnCommand = func(id int) {
 		if id == cmdQuit {
 			tr.Quit()
@@ -97,7 +97,7 @@ func main() {
 	icon, err := smallIcon()
 	if err == nil {
 		tr.Icon = icon
-		err = tr.Run() // returns nil after 退出
+		err = tr.Run() // returns nil after Exit
 		icon.DestroyIcon()
 	}
 	if err != nil {
@@ -131,10 +131,10 @@ func serve(status func(string)) {
 				if err != nil {
 					break
 				}
-				status("宿主机已连接")
+				status("Host connected")
 				agent.Serve(c)
 				c.Close()
-				status("等待宿主机连接")
+				status("Waiting for the host")
 			}
 			l.Close()
 			time.Sleep(time.Second)
@@ -206,7 +206,7 @@ func uninstall() {
 		}
 		time.Sleep(250 * time.Millisecond)
 	}
-	done = append(done, "已停止其他 hyperhand-agent.exe 进程")
+	done = append(done, "Stopped other hyperhand-agent.exe processes")
 
 	if k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.SET_VALUE); err != nil {
 		failed = append(failed, `HKCU\...\Run\HyperHandAgent: `+err.Error())
@@ -223,13 +223,13 @@ func uninstall() {
 	d, f := removeFolders(self, os.TempDir(), filepath.Join(os.Getenv("LOCALAPPDATA"), "HyperHand"), `C:\Users\Public\HyperHand`)
 	done, failed = append(done, d...), append(failed, f...)
 
-	msg := "已移除:\n" + strings.Join(done, "\n")
+	msg := "Removed:\n" + strings.Join(done, "\n")
 	flags := uint32(0x40) // MB_ICONINFORMATION
 	if len(failed) > 0 {
-		msg += "\n\n失败:\n" + strings.Join(failed, "\n")
+		msg += "\n\nFailed:\n" + strings.Join(failed, "\n")
 		flags = 0x30 // MB_ICONWARNING
 	}
-	windows.MessageBox(0, windows.StringToUTF16Ptr(msg), windows.StringToUTF16Ptr("HyperHand 卸载"), flags)
+	windows.MessageBox(0, windows.StringToUTF16Ptr(msg), windows.StringToUTF16Ptr("HyperHand uninstall"), flags)
 }
 
 // removeFolders deletes dirs; the running executable self, if it is in one of them, is moved to temp first, or to the
@@ -246,7 +246,7 @@ func removeFolders(self, temp string, dirs ...string) (done, failed []string) {
 				failed = append(failed, self+": "+err.Error())
 			} else {
 				self = moved
-				done = append(done, "本程序已移到 "+moved+"（之后可直接删除）")
+				done = append(done, "This program was moved to "+moved+" (delete it any time)")
 			}
 		}
 		if err := os.RemoveAll(dir); err != nil { // removes what it can even when some entries fail
