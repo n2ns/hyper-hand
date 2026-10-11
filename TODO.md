@@ -78,7 +78,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 
 ## 4. Release and verification workflow
 
-- [ ] Publish a release (the user's decision; a `0.3.0` candidate package was built and verified, see the [record](docs/release-candidate-20261011.md)) containing the current AI-oriented tool surface, the new guest protocol generation, semantic actions, directory mirroring, UI waits/assertions, and control search/subtree observation. They remain under [Unreleased](CHANGELOG.md#unreleased). Migration notes are in `CHANGELOG.md` and packaged and installed versions and hashes were verified for the candidate; turn `[Unreleased]` into the version's section and tag.
+- [ ] Publish 0.3.0 (version chosen 2026-10-11; the changes are under [0.3.0](CHANGELOG.md#030---2026-10-11) with migration notes): push the `v0.3.0` tag, then install the release and run `vm_update_agent` on every VM. The candidate package verified earlier ([record](docs/release-candidate-20261011.md)) predates later commits; the tag build replaces it.
 - [ ] After the release is installed, run `vm_update_agent` on `Win10-PipeSifu`; it was not touched in the 2026-10-11 run.
 - [ ] Three desktop hit-test tests of `internal/agent` (`TestWindowAt`, `TestFocusedHelper`, `TestControlHintNativeIdentityAndFallback`) fail whenever the host desktop is locked (their hits land on `LockApp.exe`), so `go test -race ./...` passes only on an unlocked desktop. Decide whether they should skip on a locked desktop or stay as they are.
 
