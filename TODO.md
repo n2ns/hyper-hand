@@ -61,7 +61,6 @@ References: [tool behavior](docs/features.md), [Win10 acceptance](docs/acceptanc
 Record the exact source/build, environment, expected behavior and independent evidence for each result. Preserve the distinction between unit coverage and actual installed behavior.
 
 - [ ] **Host tray Restart menu:** click the actual menu and verify replacement of the old tray, MCP recovery and absence of duplicate instances. Installer-driven replacement is not equivalent coverage.
-- [ ] **Cold boot without a signed-in user:** verify that the VM remains running, desktop unavailability is reported clearly and subsequent status queries work. Automatic sign-in or unlocking an existing session does not cover this case.
 - [ ] **Original AutoCAD focus-fallback branch:** reproduce failure of `SetForegroundWindow`, establish that the fallback actually runs, then verify the foreground target and input destination. The tested KeyTips recovery sequence does not cover this branch.
 - [ ] **Host self-uninstall:** start uninstall from the installed executable; verify self-removal/deferred cleanup, service/task/socket registration cleanup and successful reinstallation. Uninstall/reinstall from an external release executable has already passed.
 - [ ] **Display configurations:** test non-default DPI, multiple monitors and negative coordinate origins. Verify screenshot coordinates and actual input targets. The second VM is covered: screenshot coordinates, VM-bound observations, concurrent calls and scaled-pixel input on both VMs passed (see the [second VM acceptance](docs/second-vm-acceptance-20261010.md)).
@@ -115,6 +114,7 @@ Known behavior kept on purpose: an action marks itself as mutating before it ask
 - [x] Release 0.3.0 published 2026-10-11 (tag `v0.3.0` at `82e18fe`, GitHub Release Latest); installed on the host from the release zip (hashes equal, server reports 0.3.0) and the agents of `Win10` and `Win10-PipeSifu` updated to 0.3.0.
 - [x] Agent desktop tests on a locked host: `TestWindowAt`, `TestFocusedHelper` and `TestControlHintNativeIdentityAndFallback` skip with a reason while the session is locked (`WTSSessionInfoEx`; Windows cannot be unlocked by a program, decision 2026-10-11) and run as before otherwise. The skip itself was not exercised on a locked host.
 - [x] Guest agent UI in English (decision 2026-10-11): tray menu `Host connected` / `Waiting for the host` / `Exit` and the uninstall message box, checked on the Win10 screen.
+- [x] Cold boot without a signed-in user: `vm_start` reports `agent_required` (no user signed in) and leaves the VM running; `vm_status`, `vm_doctor` and screenshots keep working. See the [acceptance record](docs/acceptance-followups-20261011.md#cold-boot-without-a-signed-in-user).
 - [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; interruption, expiry and old-agent coverage passed (section 1); release remains in section 4.
 
 The old title selectors remain removed. UI waits use HWND/PID, exact control properties or observation-bound runtime identity; they do not restore the legacy title-based interface.
