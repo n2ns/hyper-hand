@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A UI Automation read that timed out on a window that still responds (AutoCAD 2015's main window: about 1,400 nodes at a few hundred per second) was reported as `target_not_responding` with a `next` suggesting to end the program. The agent now says whether the window is hung: a responding window gives the new code `ui_automation_timeout` (and for `vm_observe` a `stale_risk` saying so) with a `next` asking for lower limits or a subtree search; a hung one stays `target_not_responding`. Requires the updated guest agent (`vm_update_agent`); older agents keep the previous reports.
+
 ### Changed
 
 - The guest agent's tray menu (`Host connected`, `Waiting for the host`, `Exit`) and the `uninstall` message box are in English instead of Chinese. Requires the updated guest agent (`vm_update_agent`).

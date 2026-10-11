@@ -880,6 +880,14 @@ func TestScreenObservationWithControls(t *testing.T) {
 	if r, m := td.call(t, "vm_set_value", map[string]any{"observation_id": id, "index": 1, "value": "x"}); !r.IsError || m["error"] != codeTargetNotResponding {
 		t.Errorf("agent UIA timeout: %v", m)
 	}
+	// The agent reports the window as responding: the tree was slow, so ui_automation_timeout, and the action may have
+	// happened, so no blind retry and no suggestion to kill the program.
+	td = newTestDeps(t, controlAgent(proto.ControlActionResult{}, errors.New("UI Automation interrupted: context deadline exceeded (window responding)")))
+	id = td.screenObservation(options(), controlNodes())
+	if r, m := td.call(t, "vm_set_value", map[string]any{"observation_id": id, "index": 1, "value": "x"}); !r.IsError || m["error"] != codeUIATimeout ||
+		!strings.Contains(m["next"].(string), "may or may not have happened") || strings.Contains(m["next"].(string), "taskkill") {
+		t.Errorf("responding window UIA timeout: %v", m)
+	}
 }
 
 func TestTypeByIndexReadsBack(t *testing.T) {

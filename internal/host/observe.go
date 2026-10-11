@@ -219,6 +219,8 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 				return nil, nil, agentRequired(err)
 			case agentUnreachable(err):
 				out.Agent, out.Window = "offline", nil
+			case uiaTimedOut(err) && strings.Contains(err.Error(), "(window responding)"):
+				risks = append(risks, "control tree not read within 10 s although the window responds: lower max_depth or max_nodes, or use vm_find_controls")
 			case uiaTimedOut(err):
 				risks = append(risks, "target not responding: control tree not read")
 			default:

@@ -155,6 +155,29 @@ func runControlsCommand(ctx context.Context, cmd *exec.Cmd, a proto.ControlsArgs
 	return *reply.Controls, nil
 }
 
+// interruptedError reports a helper that ran out of time and whether its target window is hung: a responsive window
+// whose control tree is large or whose provider is slow (AutoCAD's ribbon) times out the same way as a hung one.
+// The host maps "(window responding)" and "(window hung)" to different codes.
+func interruptedError(ctx context.Context, req helperRequest) error {
+	err := fmt.Errorf("UI Automation interrupted: %w", ctx.Err())
+	var h uint64
+	switch {
+	case req.Controls != nil:
+		h = req.Controls.Handle
+	case req.Find != nil:
+		h = req.Find.Handle
+	case req.Action != nil:
+		h = req.Action.Handle
+	}
+	if h == 0 {
+		return err
+	}
+	if r, _, _ := pIsHungAppWindow.Call(uintptr(h)); r != 0 {
+		return fmt.Errorf("%w (window hung)", err)
+	}
+	return fmt.Errorf("%w (window responding)", err)
+}
+
 // A broken provider can hang even during COM Release. Only the disposable process calls UIA.
 func runHelper(ctx context.Context, cmd *exec.Cmd, req helperRequest) (helperReply, error) {
 	data, err := json.Marshal(req)
@@ -169,7 +192,7 @@ func runHelper(ctx context.Context, cmd *exec.Cmd, req helperRequest) (helperRep
 	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
-			return helperReply{}, fmt.Errorf("UI Automation interrupted: %w", ctx.Err())
+			return helperReply{}, interruptedError(ctx, req)
 		}
 		return helperReply{}, fmt.Errorf("UI Automation helper: %w", err)
 	}

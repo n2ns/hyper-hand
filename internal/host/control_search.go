@@ -63,14 +63,24 @@ func (d *deps) loadControlScope(ctx context.Context, vm, id string, index int) (
 	return &w, &n, nil
 }
 
-// uiaNotResponding returns target_not_responding when err is the agent's UI Automation helper timing out on a busy or
-// hung window (a read, so nothing happened), else nil.
+// uiaNotResponding maps the agent's UI Automation helper timing out on a read (nothing happened): the agent adds
+// whether the window is hung. A responding window has a control tree too large or slow for the 10 s helper budget
+// (ui_automation_timeout); a hung one is target_not_responding. Older agents say neither. Other errors give nil.
 func uiaNotResponding(err error) error {
-	if !strings.Contains(err.Error(), "UI Automation interrupted") {
+	m := err.Error()
+	switch {
+	case !strings.Contains(m, "UI Automation interrupted"):
 		return nil
+	case strings.Contains(m, "(window responding)"):
+		return refuse(codeUIATimeout, uiaTimeoutNext, nil, "%v", err)
+	case strings.Contains(m, "(window hung)"):
+		return refuse(codeTargetNotResponding, "the window is hung (it has not processed messages for 5 s): wait and retry, or end the program with vm_exec taskkill", nil, "%v", err)
 	}
-	return refuse(codeTargetNotResponding, "the window did not answer UI Automation within 10 s (busy or hung); call vm_observe on it later, or end the program with vm_exec taskkill", nil, "%v", err)
+	return refuse(codeTargetNotResponding, "the window did not answer UI Automation within 10 s (busy, hung, or a control tree too large to read in time): call vm_observe on it later, or narrow the read", nil, "%v", err)
 }
+
+// uiaTimeoutNext is the next step of ui_automation_timeout.
+const uiaTimeoutNext = "the window responds, but reading its control tree did not finish within 10 s (a large or slow tree): lower max_depth and max_visited or max_nodes, or search a subtree with observation_id and index"
 
 func controlReadError(err error) error {
 	if strings.HasPrefix(err.Error(), "element not found") {

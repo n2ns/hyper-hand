@@ -24,16 +24,17 @@ const (
 	codeCovered             = "covered"            // another window covers the point
 	codeIntegrityMismatch   = "integrity_mismatch" // the target runs at a higher integrity level than the agent
 	codeTargetNotResponding = "target_not_responding"
-	codeUnsupportedPattern  = "unsupported_pattern" // the control does not support the requested action
-	codePartialInput        = "partial_input"       // some input was injected before the failure
-	codeAgentRequired       = "agent_required"      // the operation needs the guest agent, which is not reachable
-	codeAgentOutdated       = "agent_outdated"      // the agent's protocol is older than proto.Protocol
-	codeAmbiguousTarget     = "ambiguous_target"    // a selector matched several windows
-	codeNoWindow            = "no_window"           // no window matched, or none appeared
-	codeNoCheckpoint        = "no_checkpoint"       // no checkpoint has the given id or name
-	codeElevationTimeout    = "elevation_timeout"   // vm_exec admin: elevation did not complete in time; the command did not run
-	codeStepFailed          = "step_failed"         // vm_batch: a step returned an error; the batch stopped there
-	codeAssertionFailed     = "assertion_failed"    // vm_batch: a step ran but its result failed an assertion; the batch stopped there
+	codeUnsupportedPattern  = "unsupported_pattern"   // the control does not support the requested action
+	codePartialInput        = "partial_input"         // some input was injected before the failure
+	codeAgentRequired       = "agent_required"        // the operation needs the guest agent, which is not reachable
+	codeAgentOutdated       = "agent_outdated"        // the agent's protocol is older than proto.Protocol
+	codeAmbiguousTarget     = "ambiguous_target"      // a selector matched several windows
+	codeNoWindow            = "no_window"             // no window matched, or none appeared
+	codeNoCheckpoint        = "no_checkpoint"         // no checkpoint has the given id or name
+	codeElevationTimeout    = "elevation_timeout"     // vm_exec admin: elevation did not complete in time; the command did not run
+	codeUIATimeout          = "ui_automation_timeout" // the window responds, but its UI Automation read did not finish in time
+	codeStepFailed          = "step_failed"           // vm_batch: a step returned an error; the batch stopped there
+	codeAssertionFailed     = "assertion_failed"      // vm_batch: a step ran but its result failed an assertion; the batch stopped there
 )
 
 // toolError is a structured refusal: Code is one of the code constants, Reason says what happened, Next names the

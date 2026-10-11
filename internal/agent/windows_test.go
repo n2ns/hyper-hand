@@ -250,6 +250,25 @@ func TestFocusWindowRefusesHungWindow(t *testing.T) {
 	}
 }
 
+// A helper timeout names the window state: a window that processes messages is "responding" (its tree was too slow),
+// and without a target handle nothing is added.
+func TestInterruptedErrorNamesWindowState(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	h := offscreenWindow(t, "HyperHand responding window", 0, 0)
+	var msg [48]byte
+	user32.NewProc("PeekMessageW").Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 0) // this thread now processes messages
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := interruptedError(ctx, helperRequest{Find: &proto.FindControlsArgs{Handle: uint64(h)}})
+	if !strings.HasPrefix(err.Error(), "UI Automation interrupted") || !strings.HasSuffix(err.Error(), "(window responding)") {
+		t.Errorf("responding window: %v", err)
+	}
+	if err := interruptedError(ctx, helperRequest{Focused: true}); strings.Contains(err.Error(), "(window") {
+		t.Errorf("no handle: %v", err)
+	}
+}
+
 func TestWindowAtOffScreen(t *testing.T) {
 	r, _, err := windowAt(context.Background(), mustJSON(proto.PointArgs{X: -30000, Y: -30000}), nil)
 	if err != nil || r.(proto.HandleResult).Handle != 0 {
