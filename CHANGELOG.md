@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `vm_doctor` `host.enhanced_session` warns only when the guest session is actually off the console (`guest.session` reports it not the console session); a host that merely allows enhanced session mode is `ok`, with the detail saying so. `vm_take_console` recovers such a session, so the permission alone is no longer a problem to act on.
 - The guest agent's tray menu (`Host connected`, `Waiting for the host`, `Exit`) and the `uninstall` message box are in English instead of Chinese. Requires the updated guest agent (`vm_update_agent`).
 
 ## [0.3.0] - 2026-10-11

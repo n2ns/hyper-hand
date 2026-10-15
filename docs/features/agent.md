@@ -71,7 +71,7 @@ The guest protocol has a generation number (`proto.Protocol` in `internal/proto/
 | `host.mcp` | this process answered the call; `detail` names the URL it serves | always ok |
 | `host.pipe` | dialling `\\.\pipe\HyperHandService` (2 s) | fail: not reachable |
 | `host.hvsocket` | the registry registration of the Hyper-V socket service ID (see 1.2) | fail: not registered |
-| `host.enhanced_session` | `EnhancedMode` under `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization` | warn: the host allows enhanced session mode |
+| `host.enhanced_session` | `EnhancedMode` under `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization` | warn: the host allows enhanced session mode and `guest.session` finds the session off the console; ok otherwise (also when the VM is off or the session cannot be read), the detail saying that it is allowed |
 | `vm.power` | the selected VM | fail: the VM cannot be resolved (see 2.3) or is not running; the guest checks are then skipped |
 | `guest.agent` | a 5 s ping: version, protocol, hostname, user | fail: no answer (`call vm_start ...; ... vm_install_agent`), or protocol older than the host's (`call vm_update_agent`) |
 | `guest.session` | `session_state` | fail: not available, or not the console session; warn: a UAC prompt is open, or the session is locked |

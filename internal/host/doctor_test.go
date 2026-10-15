@@ -156,3 +156,29 @@ func TestDoctorHostChecksReturnStatus(t *testing.T) {
 		t.Errorf("mcp: %+v", c)
 	}
 }
+
+// host.enhanced_session warns only when the guest session is actually off the console.
+func TestDoctorEnhancedSessionWarnsOnlyWhenSessionTaken(t *testing.T) {
+	allowed := doctorCheck{Check: "host.enhanced_session", Status: doctorWarn, Detail: "allowed", Suggestion: "turn it off"}
+	for _, c := range []struct {
+		name    string
+		state   string
+		session proto.SessionStateResult
+		want    string
+	}{
+		{"console", "Running", proto.SessionStateResult{Console: true}, doctorOK},
+		{"taken", "Running", proto.SessionStateResult{}, doctorWarn},
+		{"vm off", "Off", proto.SessionStateResult{}, doctorOK},
+	} {
+		f := &doctorFake{ping: proto.PingResult{Protocol: proto.Protocol}, session: c.session, windows: proto.WindowsResult{AgentIntegrity: "medium"}}
+		dr := doctor{
+			host: []func() doctorCheck{fixedCheck(allowed)},
+			find: func(string) (hyperv.VM, error) { return hyperv.VM{Name: "Win10", State: c.state}, nil },
+			call: f.call,
+		}
+		got := dr.run(context.Background(), "Win10")[0]
+		if got.Check != "host.enhanced_session" || got.Status != c.want || (c.want == doctorOK && got.Suggestion != "") {
+			t.Errorf("%s: %+v", c.name, got)
+		}
+	}
+}

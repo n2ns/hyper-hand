@@ -53,8 +53,18 @@ func newDoctor(b Backend, call agentCall) doctor {
 
 // run performs every check; it never changes anything. Guest checks that need the agent are skipped (not reported)
 // when the VM is not running, and the session and integrity checks when the agent does not answer.
-func (dr doctor) run(ctx context.Context, vm string) []doctorCheck {
-	out := make([]doctorCheck, 0, 9)
+// host.enhanced_session stays a warning only when the guest session is off the console; otherwise it is ok.
+func (dr doctor) run(ctx context.Context, vm string) (out []doctorCheck) {
+	taken := false
+	defer func() {
+		for i := range out {
+			if c := &out[i]; c.Check == "host.enhanced_session" && c.Status == doctorWarn && !taken {
+				c.Status, c.Suggestion = doctorOK, ""
+				c.Detail = "this host allows enhanced session mode; it matters only when guest.session reports the session off the console"
+			}
+		}
+	}()
+	out = make([]doctorCheck, 0, 9)
 	for _, f := range dr.host {
 		out = append(out, f())
 	}
@@ -88,6 +98,7 @@ func (dr doctor) run(ctx context.Context, vm string) []doctorCheck {
 	case err != nil:
 		out = append(out, doctorCheck{Check: "guest.session", Status: doctorFail, Detail: "session state unavailable: " + err.Error(), Suggestion: "call vm_update_agent"})
 	case !s.Console:
+		taken = true
 		out = append(out, doctorCheck{Check: "guest.session", Status: doctorFail, Detail: "the agent's session is not the VM console session (an enhanced session, remote desktop or another user's session): host screenshots and input do not reach it",
 			Suggestion: "call vm_take_console (it disconnects the enhanced or remote desktop viewer); to keep it from recurring, switch View > Enhanced Session off in VMConnect"})
 	case s.Consent:
