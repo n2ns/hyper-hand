@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-16
+
 ### Added
 
 - `vm_take_console`: moves the guest user's session back to the VM console when an enhanced VMConnect session or a remote desktop connection took it, by running `tscon` elevated in the guest, so screenshots and input work again without signing out; it disconnects the viewer. `session_unusable` for a session that is not the console session, `vm_doctor` (`guest.session`) and `vm_unlock` now name it. Host only: no `vm_update_agent` needed.
