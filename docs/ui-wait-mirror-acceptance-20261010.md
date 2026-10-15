@@ -15,7 +15,7 @@ The staged agent beside the installed host had the same agent hash. `vm_update_a
 
 The installed host tray path and both installed hashes were rechecked after acceptance. The service remained running with its registered installed executable, and the pre-existing disabled Start with Windows preference was preserved.
 
-Maintained packages passed `go test -race ./cmd/... ./internal/... -count=1 -timeout=240s` and `go vet ./cmd/... ./internal/...`; the independent MCP wait tests also passed three race-enabled repetitions. The unrelated historical Go experiments under ignored `build/` still prevent a clean full `./...` run; see [TODO](../TODO.md#4-release-and-verification-workflow).
+Maintained packages passed `go test -race ./cmd/... ./internal/... -count=1 -timeout=240s` and `go vet ./cmd/... ./internal/...`; the independent MCP wait tests also passed three race-enabled repetitions. The unrelated historical Go experiments under ignored `build/` still prevent a clean full `./...` run; since resolved by `build/go.mod`, see [building](building.md).
 
 ## UI conditions and assertions
 
