@@ -132,6 +132,59 @@ func (u unlocker) unlock(ctx context.Context, vm string) (string, error) {
 	return "", errors.New("the session is still locked 15 s after the stored password was typed; it was not retried, so that the account is not locked out. Check the stored password (or PIN) and the screen with vm_observe")
 }
 
+// Session states takeConsole returns.
+const (
+	sessionMoved          = "moved"           // tscon moved the agent's session to the console
+	sessionAlreadyConsole = "already_console" // the agent's session was the console session; nothing ran
+)
+
+// tsconCommand moves the session of the elevated PowerShell that runs it, which is the agent's session, to the console.
+const tsconCommand = `tscon.exe ((Get-Process -Id $PID).SessionId) /dest:console; exit $LASTEXITCODE`
+
+// takeConsole moves vm's agent session from an enhanced or remote desktop connection (or a disconnected state) back to
+// the VM console with an elevated tscon, then waits up to 10 s until the agent reports the console session. It returns
+// sessionAlreadyConsole without running anything when the session is the console session.
+func (u unlocker) takeConsole(ctx context.Context, vm string) (string, proto.SessionStateResult, error) {
+	s, err := u.state(ctx, vm)
+	if err != nil {
+		return "", s, err
+	}
+	if s.Console {
+		return sessionAlreadyConsole, s, nil
+	}
+	var r proto.ExecResult
+	if _, err := u.call(ctx, vm, proto.OpExec, proto.ExecArgs{Command: tsconCommand, TimeoutMs: 30000, Admin: true}, nil, &r); err != nil {
+		return "", s, err
+	}
+	if r.ElevationPending {
+		return "", s, refuse(codeElevationTimeout, "the UAC prompt is in the remote session, where Hyper-V input cannot reach it: a person must approve it in the enhanced or remote desktop viewer, or sign the user out there and sign in on the VM console; then call vm_status", nil, "tscon did not run: elevation did not complete within 30 s")
+	}
+	if r.TimedOut {
+		return "", s, refuse(codeFailed, "call vm_status; if the session is still not the console, call vm_doctor", map[string]any{"timed_out": true, "stdout": r.Stdout, "stderr": r.Stderr}, "tscon did not finish within 30 s and was terminated")
+	}
+	if r.ExitCode != 0 {
+		return "", s, refuse(codeFailed, "call vm_doctor and vm_status; the session may belong to another user or have been signed out", map[string]any{"exit_code": r.ExitCode, "stdout": r.Stdout, "stderr": r.Stderr}, "tscon exited with %d", r.ExitCode)
+	}
+	// Right after the move the agent can report the session locked for a moment, so a locked console session is
+	// polled further and reported locked only if the last reading still says so.
+	for i := 0; i < 10; i++ {
+		if s, err = u.state(ctx, vm); err == nil && s.Console && !s.Locked {
+			return sessionMoved, s, nil
+		}
+		if ctx.Err() != nil {
+			return "", s, ctx.Err()
+		}
+		u.sleep(time.Second)
+	}
+	if err != nil {
+		return "", s, err
+	}
+	if s.Console {
+		return sessionMoved, s, nil
+	}
+	return "", s, errors.New("tscon exited 0 but the agent still reports a session other than the console 10 s later; call vm_doctor and vm_observe")
+}
+
 // typePassword types pw and Enter into the password box. It holds the input lock, so that no other HyperHand tool sends
 // input meanwhile, and checks the password box right before typing: Ctrl+A (which selects anything left in the box,
 // so the password replaces it) goes first, as it types no character wherever it lands.
@@ -157,7 +210,7 @@ func (u unlocker) typePassword(ctx context.Context, vm, pw string) error {
 	return u.keys(vm, "enter")
 }
 
-var errNotConsole = errors.New("the agent's session is not the VM console session (an enhanced session, remote desktop or another user's session), so the Hyper-V keyboard would not type into it; the password was not typed")
+var errNotConsole = errors.New("the agent's session is not the VM console session (an enhanced session, remote desktop or another user's session), so the Hyper-V keyboard would not type into it; the password was not typed. Call vm_take_console first")
 
 // passwordBoxReady checks, right before the password is typed, that keystrokes go to the sign-in screen of the agent's
 // own session: Windows reports it locked, it is the console session, LogonUI runs in it, input goes to the secure

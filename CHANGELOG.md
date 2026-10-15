@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `vm_take_console`: moves the guest user's session back to the VM console when an enhanced VMConnect session or a remote desktop connection took it, by running `tscon` elevated in the guest, so screenshots and input work again without signing out; it disconnects the viewer. `session_unusable` for a session that is not the console session, `vm_doctor` (`guest.session`) and `vm_unlock` now name it. Host only: no `vm_update_agent` needed.
+
 ### Fixed
 
 - `vm_exec` `admin` does not say that, while it waits for a UAC consent prompt, other agent calls on the VM wait behind it (`vm_observe` included), so a caller looking at the screen to find the prompt waited until the timeout. The `admin` description and the documentation now say so and name raw `vm_key alt+y` (or `esc`) as the answer that goes through at once.

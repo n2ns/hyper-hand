@@ -10,7 +10,6 @@ These are development candidates, not authorization to implement all of them tog
 
 | Priority | Capability | Minimum delivery and acceptance |
 | --- | --- | --- |
-| P1 | Return the session to the console | A tool that runs `tscon <agent session> /dest:console` elevated in the guest when the agent's session is not the console session (enhanced VMConnect or remote desktop), reports the resulting session and invalidates old observations; `session_unusable` names it. Manual `tscon` worked on Win10 (see the [enhanced session record](docs/enhanced-session-acceptance-20261015.md)). |
 | P2 | VMConnect viewer reconnection | Recover the host viewer after VM lifecycle operations leave it disconnected. Verify viewer recovery separately from guest command and screenshot connectivity; the latter can remain healthy while the viewer is disconnected. |
 
 References: [tool behavior](docs/features.md), [Win10 acceptance](docs/acceptance-20261010.md), and [semantic control acceptance](docs/semantic-acceptance-20261010.md).
@@ -34,7 +33,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 
 ## 3. Product scope decisions
 
-- [ ] Decide whether to control a session while it stays on enhanced/RDP (guest-side capture and input, or HyperHand as the RDP client). Returning the session to the console (section 1) disconnects the viewer, so a person and HyperHand cannot share the session; see the [enhanced session record](docs/enhanced-session-acceptance-20261015.md).
+- [ ] Decide whether to control a session while it stays on enhanced/RDP (guest-side capture and input, or HyperHand as the RDP client). Returning the session to the console (`vm_take_console`) disconnects the viewer, so a person and HyperHand cannot share the session; see the [enhanced session record](docs/enhanced-session-acceptance-20261015.md).
 - [ ] Decide whether unattended first sign-in belongs in scope. Current unlock support requires an already signed-in, locked session with the agent running.
 - [ ] Decide whether UWP/MSIX discovery and launch support is needed beyond current Win32 Start Menu/App Paths discovery.
 - [ ] Decide whether the test VMs' unlock passwords should have at least 4 characters. `vm_evidence` does not redact secrets shorter than 4 characters (they would garble the record), and `Win10`'s stored password has 1 character, so it appears in exported evidence (counted in `skipped_short_secrets`).

@@ -196,7 +196,7 @@ func (a *action) checkSession(targeted bool) error {
 	case s.Locked:
 		return refuse(codeSessionUnusable, "call vm_unlock", fields, "the guest session is locked")
 	case !s.Console:
-		return refuse(codeSessionUnusable, "call vm_doctor; the agent must run in the VM console session (sign in on the console, not an enhanced or remote desktop session)", fields, "the agent's session is not the VM console session, so Hyper-V input would not reach its windows")
+		return refuse(codeSessionUnusable, "call vm_take_console (it moves the session back to the console and disconnects the enhanced or remote desktop viewer), then retry", fields, "the agent's session is not the VM console session, so Hyper-V input would not reach its windows")
 	case s.SecureDesktop:
 		if !targeted && s.Consent {
 			return nil
@@ -234,7 +234,7 @@ func (a *action) fresh() error {
 		return refuse(codeStaleObservation, "wait for the running VM operation to finish, then call vm_observe again", nil, "VM %q has a mutating operation in progress", a.vm)
 	}
 	if o.Epoch != version.Epoch {
-		return refuse(codeStaleObservation, next, nil, "VM %q restarted, was restored or changed agent since observation %s", a.vm, o.ID)
+		return refuse(codeStaleObservation, next, nil, "VM %q restarted, was restored, changed agent or had its session moved to the console since observation %s", a.vm, o.ID)
 	}
 	if o.Window == nil {
 		return nil

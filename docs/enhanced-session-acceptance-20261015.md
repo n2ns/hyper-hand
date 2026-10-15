@@ -26,3 +26,11 @@ Tests whether a guest session that an enhanced (RDP over VMBus) VMConnect sessio
 ## Not covered
 
 - A session that was disconnected (enhanced window closed) rather than attached to RDP; network RDP instead of VMBus; a session locked while on RDP; a guest whose UAC prompts for consent.
+
+## vm_take_console (same day)
+
+- Builds of this checkout installed with `go run ./cmd/hyperhand dev-install` (no UAC); the agent was unchanged (`dev-20261011-112106-ccecaf7`). `go vet` and `go test -race ./cmd/... ./internal/...` pass. Evidence: `build/enhanced-session-20261015/tool/` and `tool-final/`.
+- Session on the console: `already_console`, nothing ran.
+- Session on enhanced VMConnect: a targeted `vm_key` was refused with `session_unusable` and `next` naming `vm_take_console`; `vm_doctor` `guest.session` suggested it.
+- **First build (defect found):** `vm_take_console` returned `moved` in 1.6 s with `locked: true` and `next` `call vm_unlock`, but `vm_status` a moment later, the screenshot and `qwinsta` showed the session unlocked: the agent reports the session locked for a moment right after the move. An action with an observation taken before the move was refused with `stale_observation`. Fixed: a locked console reading keeps being polled (up to 10 s), with a unit test that failed on the first build.
+- **Final build:** `vm_take_console` returned `moved` with `{locked: false, console: true}` in 2.8 s; `qwinsta` session 1 `console` `Active`, screen 1920×1080; `vm_launch notepad.exe`, a targeted `vm_type` and a raw `vm_key backspace` read back `take console o`. VMConnect again showed the lost-connection prompt.
