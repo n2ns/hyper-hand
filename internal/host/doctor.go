@@ -89,7 +89,7 @@ func (dr doctor) run(ctx context.Context, vm string) []doctorCheck {
 		out = append(out, doctorCheck{Check: "guest.session", Status: doctorFail, Detail: "session state unavailable: " + err.Error(), Suggestion: "call vm_update_agent"})
 	case !s.Console:
 		out = append(out, doctorCheck{Check: "guest.session", Status: doctorFail, Detail: "the agent's session is not the VM console session (an enhanced session, remote desktop or another user's session): host screenshots and input do not reach it",
-			Suggestion: "in VMConnect switch View > Enhanced Session off, or sign the user out of the remote session, then call vm_status"})
+			Suggestion: "call vm_take_console (it disconnects the enhanced or remote desktop viewer); to keep it from recurring, switch View > Enhanced Session off in VMConnect"})
 	case s.Consent:
 		out = append(out, doctorCheck{Check: "guest.session", Status: doctorWarn, Detail: "a UAC prompt is open; keyboard input goes to the secure desktop", Suggestion: "call vm_observe to see the prompt, then vm_key with alt+y or esc"})
 	case s.Locked:

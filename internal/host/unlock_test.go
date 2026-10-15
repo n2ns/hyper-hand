@@ -20,6 +20,8 @@ type fakeGuest struct {
 	pingErr error
 	input   []string // keys and typed text, in order
 	proto   int      // the protocol ping reports; 0 means proto.Protocol
+	exec    proto.ExecResult
+	execs   []proto.ExecArgs // OpExec arguments, in order
 }
 
 func (g *fakeGuest) protocol() int {
@@ -29,9 +31,12 @@ func (g *fakeGuest) protocol() int {
 	return g.proto
 }
 
-func (g *fakeGuest) call(_ context.Context, _, op string, _ any, _ []byte, result any) ([]byte, error) {
+func (g *fakeGuest) call(_ context.Context, _, op string, args any, _ []byte, result any) ([]byte, error) {
 	var r any
 	switch op {
+	case proto.OpExec:
+		g.execs = append(g.execs, args.(proto.ExecArgs))
+		r = g.exec
 	case proto.OpPing:
 		if g.pingErr != nil {
 			return nil, g.pingErr
@@ -172,3 +177,85 @@ func TestReady(t *testing.T) {
 	}
 }
 
+var remote = proto.SessionStateResult{} // an enhanced or remote desktop session: not the console
+
+func TestTakeConsoleRunsTsconElevatedAndWaitsForConsole(t *testing.T) {
+	g := &fakeGuest{states: []proto.SessionStateResult{remote, remote, unlocked}}
+	r, s, err := g.unlocker("", false).takeConsole(context.Background(), "Win10")
+	if err != nil || r != sessionMoved || !s.Console {
+		t.Fatalf("%q %+v %v", r, s, err)
+	}
+	if len(g.execs) != 1 || !g.execs[0].Admin || !strings.Contains(g.execs[0].Command, "tscon.exe") || !strings.Contains(g.execs[0].Command, "/dest:console") {
+		t.Errorf("execs %+v", g.execs)
+	}
+}
+
+func TestTakeConsoleAlreadyConsoleRunsNothing(t *testing.T) {
+	g := &fakeGuest{states: []proto.SessionStateResult{unlocked}}
+	r, _, err := g.unlocker("", false).takeConsole(context.Background(), "Win10")
+	if err != nil || r != sessionAlreadyConsole || len(g.execs) != 0 {
+		t.Fatalf("%q %v %+v", r, err, g.execs)
+	}
+}
+
+func TestTakeConsoleRefusals(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		exec proto.ExecResult
+		code string
+	}{
+		{"elevation pending", proto.ExecResult{TimedOut: true, ElevationPending: true}, codeElevationTimeout},
+		{"tscon fails", proto.ExecResult{ExitCode: 1, Stderr: "access denied"}, codeFailed},
+		{"tscon times out", proto.ExecResult{ExitCode: -1, TimedOut: true}, codeFailed},
+	} {
+		g := &fakeGuest{states: []proto.SessionStateResult{remote}, exec: c.exec}
+		_, _, err := g.unlocker("", false).takeConsole(context.Background(), "Win10")
+		var te *toolError
+		if !errors.As(err, &te) || te.Code != c.code {
+			t.Errorf("%s: %v", c.name, err)
+		}
+	}
+}
+
+func TestTakeConsoleStillRemoteAfterTscon(t *testing.T) {
+	g := &fakeGuest{states: []proto.SessionStateResult{remote}}
+	_, _, err := g.unlocker("", false).takeConsole(context.Background(), "Win10")
+	if err == nil || !strings.Contains(err.Error(), "still reports") {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestTakeConsoleWaitsOutMomentaryLock(t *testing.T) {
+	g := &fakeGuest{states: []proto.SessionStateResult{remote, locked, unlocked}}
+	r, s, err := g.unlocker("", false).takeConsole(context.Background(), "Win10")
+	if err != nil || r != sessionMoved || s.Locked {
+		t.Fatalf("%q %+v %v", r, s, err)
+	}
+}
+
+func TestTakeConsoleReportsLockedConsole(t *testing.T) {
+	g := &fakeGuest{states: []proto.SessionStateResult{remote, locked}}
+	r, s, err := g.unlocker("", false).takeConsole(context.Background(), "Win10")
+	if err != nil || r != sessionMoved || !s.Locked || !s.Console {
+		t.Fatalf("%q %+v %v", r, s, err)
+	}
+}
+
+func TestTakeConsoleReportsAgentErrorAfterTscon(t *testing.T) {
+	g := &fakeGuest{states: []proto.SessionStateResult{remote}}
+	u := g.unlocker("", false)
+	first := true
+	u.call = func(ctx context.Context, vm, op string, args any, data []byte, result any) ([]byte, error) {
+		if op == proto.OpSessionState && !first {
+			return nil, errors.New("agent: EOF")
+		}
+		if op == proto.OpSessionState {
+			first = false
+		}
+		return g.call(ctx, vm, op, args, data, result)
+	}
+	_, _, err := u.takeConsole(context.Background(), "Win10")
+	if err == nil || !strings.Contains(err.Error(), "agent: EOF") {
+		t.Fatalf("%v", err)
+	}
+}

@@ -8,7 +8,7 @@ HyperHand consists of a tray program and a Windows service on the host, and a sm
 
 - Host: Windows 10 or Windows 11 Pro or Enterprise with Hyper-V enabled. Installation, updates and uninstallation require administrator approval; normal tray startup and restart do not.
 - Guest: a Windows VM with a user logged on to the desktop.
-- VMConnect in basic session mode. In an enhanced session, the guest user session moves to RDP, and the host-side screenshot and input reach the console session, which shows the lock screen. Switch with View > Enhanced Session in VMConnect, or close VMConnect while HyperHand is working.
+- VMConnect in basic session mode. In an enhanced session, the guest user session moves to RDP, and the host-side screenshot and input reach the console session, which shows the lock screen. Switch with View > Enhanced Session in VMConnect, or close VMConnect while HyperHand is working. `vm_take_console` moves the session back to the console; it disconnects the enhanced viewer.
 
 ## 1. Download
 
@@ -249,7 +249,7 @@ The host keyboard sends key strokes, and a non-English IME in the guest can swal
 ### The screenshot is black or shows the lock screen
 
 - The VM must be running. A stopped or saved VM has no video output.
-- VMConnect must be in basic session mode. In an enhanced session, the host-side screenshot and input go to the console session, which is locked, while the agent sees the user's desktop; actions then refuse with `session_unusable` (`vm_doctor`: `guest.session`, `host.enhanced_session`).
+- VMConnect must be in basic session mode. In an enhanced session, the host-side screenshot and input go to the console session, which is locked, while the agent sees the user's desktop; actions then refuse with `session_unusable` (`vm_doctor`: `guest.session`, `host.enhanced_session`). Run `vm_take_console` to move the session back to the console; the enhanced viewer is disconnected, and reconnecting it takes the session away again.
 - If the guest screen is locked, run `vm_unlock` with an unlock password stored in the tray (see [Get a usable desktop after `vm_start`](#get-a-usable-desktop-after-vm_start)), or unlock it in VMConnect. If the display is off, wake it with `vm_click` or `vm_key` without `observation_id`.
 
 ### Port 8770 is already in use
