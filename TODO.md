@@ -1,6 +1,6 @@
 # HyperHand TODO
 
-Updated: 2026-10-11.
+Updated: 2026-10-15.
 
 This document tracks remaining delivery work, unimplemented capabilities and acceptance gaps. An unchecked acceptance item is not a confirmed defect. Priorities reflect the current workflow: AI-driven Windows VM automation and AutoCAD testing.
 
@@ -65,7 +65,7 @@ Record the exact source/build, environment, expected behavior and independent ev
 - [ ] **Display configurations:** test non-default DPI, multiple monitors and negative coordinate origins. Verify screenshot coordinates and actual input targets. The second VM is covered: screenshot coordinates, VM-bound observations, concurrent calls and scaled-pixel input on both VMs passed (see the [second VM acceptance](docs/second-vm-acceptance-20261010.md)).
 - [ ] **Session transitions:** verify clear refusal and recovery when switching between console and enhanced/RDP sessions. Enhanced/RDP desktop control is not currently supported; adding it is a separate scope decision below.
 - [ ] **AutoCAD ribbon (WPF) through UI Automation:** dialogs, the custom-drawn drawing area and elevated AutoCAD are covered (see the [acceptance record](docs/acceptance-followups-20261011.md#ui-automation-coverage)); the ribbon tabs were not reached because reads of the main window run into the 10 s helper limit (control-search performance below).
-- [ ] **Control-search performance:** cause of the full-tree timeouts found on 2026-10-11: AutoCAD 2015's main window has about 1,400 control-view nodes and HyperHand's node-by-node walk with current properties reads about 120 per second; in .NET, a walk with a CacheRequest took 7.9 s and one cached `FindAll` 4.9 s for the same tree (11.5 s uncached). Decide whether to switch the agent to cached subtree reads (an earlier element-cache experiment was rejected after a VM performance regression), then repeat the 2,234-node fixture benchmark and the AutoCAD ribbon. See the [performance record](docs/control-search-performance-20261010.md) and the [acceptance record](docs/acceptance-followups-20261011.md#ui-automation-coverage).
+- [ ] **Control-search performance:** cause of the full-tree timeouts found on 2026-10-11: AutoCAD 2015's main window has about 1,400 control-view nodes and HyperHand's node-by-node walk with current properties reads about 120 per second; in .NET, a walk with a CacheRequest took 7.9 s and one cached `FindAll` 4.9 s for the same tree (11.5 s uncached). Decide whether to switch the agent to cached subtree reads (an earlier element-cache experiment was rejected after a VM performance regression). A prototype is in `d1d1c1f`, off by default (`uiaCacheTree`): on the 2,234-node fixture the cached read matched the walk node for node, list 14.3-23.6 s -> 5.1-6.5 s and find 5.0 s -> 2.2-2.5 s (selector properties only); not yet measured on AutoCAD. After the decision, repeat the 2,234-node fixture benchmark and the AutoCAD ribbon. See the [performance record](docs/control-search-performance-20261010.md) and the [acceptance record](docs/acceptance-followups-20261011.md#ui-automation-coverage).
 - [ ] **Save at scale:** `vm_save` of a VM with much more memory (the 5-minute job wait); needs the VM's memory raised (a VM setting). A session locked when saved is unlocked by `vm_start` (see the [acceptance record](docs/acceptance-followups-20261011.md#saving-a-vm-whose-session-is-locked)).
 - [ ] **Unlock with a mismatched stored password:** needs the stored unlock password in the user's Credential Manager changed (user decision). Interactive UAC consent passed (see the [acceptance record](docs/acceptance-followups-20261011.md#interactive-uac-consent-in-the-guest)).
 
@@ -73,6 +73,7 @@ Evidence and boundaries: [v0.2.0 acceptance](docs/acceptance-v0.2.0.md#remaining
 
 ## 4. Release and verification workflow
 
+No open items: 0.3.0 is released and installed (section 6).
 
 ## 5. Product scope decisions
 
@@ -115,6 +116,6 @@ Known behavior kept on purpose: an action marks itself as mutating before it ask
 - [x] Hyper-V keyboard into the Run dialog: typing is intact (every special character, 248 characters); the Run dialog silently drops commands over 259 characters after variable expansion, which is what failed. See the [acceptance record](docs/acceptance-followups-20261011.md#hyper-v-keyboard-and-the-run-dialog).
 - [x] Evidence journal limits on the installed host: 2000 calls and 128 MiB of screenshots, with the dropped counts in `omitted`. See the [acceptance record](docs/acceptance-followups-20261011.md#vm_evidence-journal-limits-on-the-installed-host).
 - [x] Interactive UAC consent in the guest: approval (`alt+y`, `left` + `enter`, a raw click) and decline (`esc`), during a waiting `vm_exec admin` and through a background job. See the [acceptance record](docs/acceptance-followups-20261011.md#interactive-uac-consent-in-the-guest).
-- [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; interruption, expiry and old-agent coverage passed (section 1); release remains in section 4.
+- [x] Directory mirror implementation, host-side verification and installed Win10 acceptance; interruption, expiry and old-agent coverage passed (section 1); released in 0.3.0.
 
 The old title selectors remain removed. UI waits use HWND/PID, exact control properties or observation-bound runtime identity; they do not restore the legacy title-based interface.
