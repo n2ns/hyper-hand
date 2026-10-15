@@ -5,6 +5,7 @@
 - HyperHand is an MCP server that lets AI agents see and operate Windows virtual machines on Hyper-V.
 - The callers and the readers of every result are AI agents, not people. Design tool descriptions, return text and error messages for AI usability: as few calls per task as possible, machine-readable results that carry the facts the next call needs (actual handles, coordinates and so on), errors that state the cause and the next action. Make these trade-offs yourself; do not ask the user about them as if they were human UI preferences.
 - What HyperHand does is in `README.md` (written for human readers), the tool list and usage in `docs/user-guide.md`, the exact behavior in `docs/features/<chapter>.md` (index `docs/features.md`: read only the chapter of the tool or area you work on), building, testing, development installs and releasing in `docs/building.md`.
+- TODO.md 仅保留未完成任务，完成后移除，验证证据写入测试报告, 或归入相关文档。
 
 ## Test VMs are disposable
 
