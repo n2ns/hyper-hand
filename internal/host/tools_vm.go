@@ -262,6 +262,9 @@ func registerVM(d *deps) {
 			te.Reason = fmt.Sprintf("VM %s is running, but its desktop is not usable: %s", v.Name, te.Reason)
 			return nil, te
 		}
+		if m.AfterConsoleReady != nil {
+			m.AfterConsoleReady(v.Name)
+		}
 		return jsonResult(startOut{VM: v.Name, State: "running", Desktop: "usable", Agent: agentOf(r.Agent), Unlocked: r.Unlocked, PreviousState: powerState(v.State)})
 	})
 	addToolIn(d, toolSpec{name: "vm_status", desc: "Report a VM's power state, whether an unlock password is stored, which task holds its write ownership (owner: {task_id, idle_ms, in_flight, this_task}, null when free; in_flight counts this call when this_task) and, when it runs, the guest agent (state ok, busy or not_answering; version, protocol, user) and its session (locked, console, uac_prompt). Does not wait or change anything.", readOnly: true, idempotent: true}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
@@ -334,6 +337,9 @@ func registerVM(d *deps) {
 		state, s, err := u.takeConsole(ctx, v.Name)
 		if err != nil {
 			return nil, agentErr(err)
+		}
+		if state == "moved" && m.AfterConsoleReady != nil {
+			m.AfterConsoleReady(v.Name)
 		}
 		out := struct {
 			vmState
@@ -457,6 +463,9 @@ func registerVM(d *deps) {
 				return nil, err
 			}
 			out.State = "running"
+		}
+		if out.State == "running" && m.AfterConsoleReady != nil {
+			m.AfterConsoleReady(v.Name)
 		}
 		return jsonResult(out)
 	})

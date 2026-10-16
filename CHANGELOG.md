@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- UI Automation observations and control searches use bounded per-element property caches while walking, preserving node/depth/visited limits and password-descendant pruning. Name and Value remain live reads; searches cache only the selector properties they need. Requires `vm_update_agent`.
+
+### Fixed
+
+- Recover an existing disconnected VMConnect viewer after `vm_start`, a running `vm_restore`, or `vm_take_console` returning `moved`. The console task verifies the local VM and viewer before replacing a recognized disconnected viewer in basic mode, without changing saved enhanced-session settings. It recognizes both VMConnect video surface types and raises the replacement window using verified foreground activation with a bounded helper. Connection and foreground state are reported separately. Recovery is asynchronous and does not change the VM operation's result. See [the acceptance record](docs/p1p2-acceptance-20261016.md#p2-vmconnect-recovery).
+
 ## [0.4.0] - 2026-10-16
 
 ### Added

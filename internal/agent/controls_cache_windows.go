@@ -5,11 +5,8 @@ import (
 	"unsafe"
 
 	ole "github.com/go-ole/go-ole"
+	"hyperhand/internal/proto"
 )
-
-// PROTOTYPE: read a whole control-view subtree in one cross-process BuildUpdatedCache and then read every node from
-// the cache in process. uiaCacheTree switches collectControls and collectFindControls to it.
-var uiaCacheTree bool
 
 const (
 	uiaCreateCacheRequest  = 20 // IUIAutomation
@@ -18,34 +15,38 @@ const (
 	uiaBuildUpdatedCache   = 9  // IUIAutomationElement
 	uiaGetCachedProperty   = 12 // GetCachedPropertyValue
 	uiaGetCachedPropertyEx = 13
-	uiaGetCachedChildren   = 19
 	uiaCachedOffset        = 32 // get_CachedX = get_CurrentX + 32
-	uiaArrayLength         = 3  // IUIAutomationElementArray
-	uiaArrayElement        = 4
-	treeScopeSubtree       = 7
+	uiaWalkerCacheOffset   = 6  // GetXElementBuildCache follows the six ordinary walker methods
+	treeScopeElement       = 1
 	propRuntimeID          = 30000
 	vtArrayI4              = ole.VT_ARRAY | ole.VT_I4
 )
 
 var uiaCacheProperties = []int32{
-	propRuntimeID, 30001, 30002, 30003, 30005, propHasKeyboardFocus, 30010, 30011, 30012, 30019, propIsOffscreen,
-	propValueValue, propValueReadOnly, propHorizontalScrollPercent, propVerticalScrollPercent, propHorizontallyScrollable,
+	propRuntimeID, 30001, 30002, 30003, propHasKeyboardFocus, 30010, 30011, 30012, 30019, propIsOffscreen,
+	propValueReadOnly, propHorizontalScrollPercent, propVerticalScrollPercent, propHorizontallyScrollable,
 	propVerticallyScrollable, propExpandState, propSelectionSelected, propToggleState,
 }
 
-// cachedSiblings is the cached children array a cached element came from.
-type cachedSiblings struct {
-	array *ole.IUnknown
-	index int
-	count int32
+// Names and values are deliberately absent: password controls must not have either read,
+// even into an internal cache. Names and values are read live after the password check.
+func searchCacheProperties(a proto.FindControlsArgs) []int32 {
+	ids := []int32{30019} // IsPassword is needed even when no selectors match: it prunes descendants.
+	if a.ControlType != 0 {
+		ids = append(ids, 30003)
+	}
+	if a.AutomationID != "" {
+		ids = append(ids, 30011)
+	}
+	return ids
 }
 
-// uiaSearchProperties are the only properties searchMatch reads; matches read info live.
-var uiaSearchProperties = []int32{30003, 30005, 30011, 30019}
-
-// cacheSubtree returns a cached copy of e holding its whole control-view subtree; the caller releases it. With
-// search, only the selector properties are cached.
-func (s *uiaSession) cacheSubtree(e *nativeControl, search bool) (*nativeControl, error) {
+// cacheElement caches just e, then reuses the request when navigating to each next
+// element. The existing bounded walk still decides which children to visit; unlike a
+// subtree cache, this never traverses password descendants or fetches a whole tree
+// before applying the limits. Boundary probes fetch only one element's metadata.
+// The session owns the cache request, and the caller releases the returned element.
+func (s *uiaSession) cacheElement(e *nativeControl, search *proto.FindControlsArgs) (*nativeControl, error) {
 	var req *ole.IUnknown
 	if err := uiaCall(s.automation, uiaCreateCacheRequest, uintptr(unsafe.Pointer(&req))); err != nil {
 		return nil, err
@@ -53,20 +54,20 @@ func (s *uiaSession) cacheSubtree(e *nativeControl, search bool) (*nativeControl
 	if req == nil {
 		return nil, errors.New("UI Automation returned no cache request")
 	}
-	defer req.Release()
+	s.cache = req
 	ids := append([]int32{}, uiaCacheProperties...)
 	for _, p := range uiaPatterns {
 		ids = append(ids, p.available)
 	}
-	if search {
-		ids = uiaSearchProperties
+	if search != nil {
+		ids = searchCacheProperties(*search)
 	}
 	for _, id := range ids {
 		if err := uiaCall(req, uiaCacheAddProperty, uintptr(id)); err != nil {
 			return nil, err
 		}
 	}
-	if err := uiaCall(req, uiaCachePutTreeScope, treeScopeSubtree); err != nil {
+	if err := uiaCall(req, uiaCachePutTreeScope, treeScopeElement); err != nil {
 		return nil, err
 	}
 	var out *ole.IUnknown
@@ -76,44 +77,7 @@ func (s *uiaSession) cacheSubtree(e *nativeControl, search bool) (*nativeControl
 	if out == nil {
 		return nil, errors.New("UI Automation returned no cached element")
 	}
-	return &nativeControl{element: out, walker: e.walker, cached: true, partial: search}, nil
-}
-
-func (e *nativeControl) cachedChild(siblings cachedSiblings) (controlElement, error) {
-	if siblings.index >= int(siblings.count) {
-		siblings.array.Release()
-		return nil, nil
-	}
-	var out *ole.IUnknown
-	if err := uiaCall(siblings.array, uiaArrayElement, uintptr(siblings.index), uintptr(unsafe.Pointer(&out))); err != nil {
-		siblings.array.Release()
-		return nil, err
-	}
-	return &nativeControl{element: out, walker: e.walker, cached: true, partial: e.partial, siblings: &siblings}, nil
-}
-
-func (e *nativeControl) cachedFirst() (controlElement, error) {
-	var arr *ole.IUnknown
-	if err := uiaCall(e.element, uiaGetCachedChildren, uintptr(unsafe.Pointer(&arr))); err != nil {
-		return nil, err
-	}
-	if arr == nil {
-		return nil, nil
-	}
-	var n int32
-	if err := uiaCall(arr, uiaArrayLength, uintptr(unsafe.Pointer(&n))); err != nil {
-		arr.Release()
-		return nil, err
-	}
-	return e.cachedChild(cachedSiblings{array: arr, count: n})
-}
-
-func (e *nativeControl) cachedNext() (controlElement, error) {
-	if e.siblings == nil {
-		return nil, nil
-	}
-	e.siblings.array.AddRef()
-	return e.cachedChild(cachedSiblings{array: e.siblings.array, index: e.siblings.index + 1, count: e.siblings.count})
+	return &nativeControl{element: out, walker: e.walker, cache: req, partial: search != nil}, nil
 }
 
 // cachedRuntimeID reads the cached RuntimeId property (VT_ARRAY|VT_I4).

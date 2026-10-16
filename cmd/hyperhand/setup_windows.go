@@ -281,7 +281,7 @@ func inspectInstall(p setupPaths, owner setupIdentity, ts *taskScheduler, m *mgr
 		return st, err
 	}
 	if t != nil {
-		if t.userSID != owner.SID || len(t.actions) != 1 || !strings.EqualFold(strings.Trim(t.actions[0].path, `"`), p.vmconnect) {
+		if !recognizedConsoleTask(t, p, owner.SID) {
 			return st, fmt.Errorf("existing %s task belongs to another user or has unexpected actions", consoleTask)
 		}
 		st.consoleTask = true
@@ -404,13 +404,13 @@ func setupInstall(p setupPaths, owner setupIdentity, self string, st installStat
 		return errors.New("logon task is not limited")
 	}
 	// On demand only (no trigger): the tray runs it with a VM name to open VMConnect with the owner's full token,
-	// since VMConnect needs Hyper-V rights that the owner's filtered token lacks. Its only action is vmconnect.exe.
-	if err := ts.register(consoleTask, consoleTaskXML(p.vmconnect, owner)); err != nil {
+	// since VMConnect needs Hyper-V rights that the owner's filtered token lacks. The helper accepts only a mode and VM ID.
+	if err := ts.register(consoleTask, consoleTaskXML(p.hostExe, owner)); err != nil {
 		return err
 	}
 	if t, err := ts.task(consoleTask); err != nil {
 		return err
-	} else if t == nil || len(t.actions) != 1 || !strings.EqualFold(t.actions[0].path, p.vmconnect) || t.triggers != 0 {
+	} else if !recognizedConsoleTask(t, p, owner.SID) || !strings.EqualFold(t.actions[0].path, p.hostExe) || t.triggers != 0 {
 		return errors.New("console task verification failed")
 	}
 	return ts.run(logonTask)

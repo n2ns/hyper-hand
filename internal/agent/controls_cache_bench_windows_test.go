@@ -11,8 +11,9 @@ import (
 	"hyperhand/internal/proto"
 )
 
-// PROTOTYPE benchmark, run on a guest against a live window:
-// HH_BENCH_HANDLE, HH_BENCH_PID, optional HH_BENCH_NODES, HH_BENCH_DEPTH, HH_BENCH_ROUNDS, HH_BENCH_FIND (automation ID).
+// Compare bounded cached navigation against the ordinary walk on a guest's live window:
+// HH_BENCH_HANDLE, HH_BENCH_PID, optional HH_BENCH_NODES, HH_BENCH_DEPTH, HH_BENCH_ROUNDS,
+// HH_BENCH_FIND (automation ID), HH_BENCH_TYPE (numeric UIA type), HH_BENCH_NAME.
 func TestUIACacheBench(t *testing.T) {
 	h, _ := strconv.ParseUint(os.Getenv("HH_BENCH_HANDLE"), 10, 64)
 	pid, _ := strconv.ParseUint(os.Getenv("HH_BENCH_PID"), 10, 32)
@@ -27,7 +28,7 @@ func TestUIACacheBench(t *testing.T) {
 	}
 	a := proto.ControlsArgs{Handle: h, PID: uint32(pid), MaxNodes: num("HH_BENCH_NODES", 5000), MaxDepth: num("HH_BENCH_DEPTH", 64)}
 	find := os.Getenv("HH_BENCH_FIND")
-	fa := proto.FindControlsArgs{Handle: h, PID: uint32(pid), AutomationID: find, MaxVisited: 20000, MaxMatches: 10, MaxDepth: 64}
+	fa := proto.FindControlsArgs{Handle: h, PID: uint32(pid), AutomationID: find, ControlType: int32(num("HH_BENCH_TYPE", 0)), Name: os.Getenv("HH_BENCH_NAME"), MaxVisited: 20000, MaxMatches: 10, MaxDepth: 64}
 	type row struct {
 		Mode                    string
 		ListMS, FindMS          float64
@@ -38,18 +39,17 @@ func TestUIACacheBench(t *testing.T) {
 	var lastFind [2]proto.FindControlsResult
 	for round := 0; round < num("HH_BENCH_ROUNDS", 3); round++ {
 		for i, cached := range []bool{false, true} {
-			uiaCacheTree = cached
 			r := row{Mode: map[bool]string{false: "walk", true: "cache"}[cached]}
 			t0 := time.Now()
-			res, err := collectControls(a)
+			res, err := collectControlsCached(a, cached)
 			if err != nil {
 				t.Fatalf("%s list: %v", r.Mode, err)
 			}
 			r.ListMS = float64(time.Since(t0).Microseconds()) / 1000
 			r.Nodes, r.Truncation, last[i] = len(res.Nodes), res.Truncation, res
-			if find != "" {
+			if fa.AutomationID != "" || fa.ControlType != 0 || fa.Name != "" {
 				t0 = time.Now()
-				fr, err := collectFindControls(fa)
+				fr, err := collectFindControlsCached(fa, cached)
 				if err != nil {
 					t.Fatalf("%s find: %v", r.Mode, err)
 				}
@@ -60,7 +60,6 @@ func TestUIACacheBench(t *testing.T) {
 			t.Log(string(b))
 		}
 	}
-	uiaCacheTree = false
 	diffs := 0
 	for i := range min(len(last[0].Nodes), len(last[1].Nodes)) {
 		if !reflect.DeepEqual(last[0].Nodes[i], last[1].Nodes[i]) {
@@ -75,4 +74,7 @@ func TestUIACacheBench(t *testing.T) {
 	t.Logf("SUMMARY nodes walk=%d cache=%d differing=%d focused walk=%d cache=%d selected_text_equal=%v find_equal=%v",
 		len(last[0].Nodes), len(last[1].Nodes), diffs, last[0].Focused, last[1].Focused,
 		last[0].SelectedText == last[1].SelectedText, reflect.DeepEqual(lastFind[0], lastFind[1]))
+	if !reflect.DeepEqual(last[0], last[1]) || !reflect.DeepEqual(lastFind[0], lastFind[1]) {
+		t.Fatal("cached and uncached results differ; use a stable fixture for the benchmark")
+	}
 }

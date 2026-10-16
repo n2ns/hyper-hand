@@ -159,7 +159,7 @@ func TestTaskXMLValidates(t *testing.T) {
 		const taskValidateOnly = 1
 		for name, x := range map[string]string{
 			"logon":   logonTaskXML(`C:\Program Files\HyperHand & <test>\hyperhand.exe`, owner),
-			"console": consoleTaskXML(p.vmconnect, owner),
+			"console": consoleTaskXML(p.hostExe, owner),
 		} {
 			r, err := oleutil.CallMethod(ts.folder, "RegisterTask", "HyperHand validation", x, taskValidateOnly, nil, nil, taskLogonInteractiveToken, nil)
 			if err != nil {
@@ -203,8 +203,7 @@ func TestTaskInspectionReadOnly(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c == nil || c.userSID != owner.SID || len(c.actions) != 1 || !strings.EqualFold(c.actions[0].path, p.vmconnect) ||
-			c.actions[0].args != `localhost "$(Arg0)"` || c.runLevel != 1 || c.triggers != 0 {
+		if !recognizedConsoleTask(c, p, owner.SID) || c.runLevel != 1 || c.triggers != 0 {
 			t.Errorf("console task: %+v", c)
 		}
 	})
