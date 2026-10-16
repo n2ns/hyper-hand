@@ -213,9 +213,12 @@ type Manager struct {
 	Backend Backend
 	// AfterStart, if set, is called with the VM name after vm_start has started a VM that was not running.
 	AfterStart func(vm string)
-	mu         sync.Mutex
-	clients    map[string]*Client
-	transfers  map[string]chan struct{} // full copy/mirror operations, retained across connection replacement
+	// AfterConsoleReady repairs an existing host viewer after start, a running restore, or taking the console.
+	// It is advisory: implementations must return promptly and report their own errors, without failing the VM operation.
+	AfterConsoleReady func(vm string)
+	mu                sync.Mutex
+	clients           map[string]*Client
+	transfers         map[string]chan struct{} // full copy/mirror operations, retained across connection replacement
 }
 
 // Client returns the agent client for a VM name. Tools always pass an explicit name (vmRequired); "" still resolves

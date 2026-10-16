@@ -1,17 +1,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/go-ole/go-ole"
@@ -23,13 +26,17 @@ import (
 	"hyperhand/internal/hyperv"
 )
 
-// consoleTask is registered by install: it runs vmconnect.exe localhost "<VM>" with the owner's full token, because
+// consoleTask is registered by install: it runs the fixed console helper with the owner's full token, because
 // VMConnect needs Hyper-V rights that the owner's filtered (non-elevated) token does not have.
 const consoleTask = "HyperHand Console"
 
 // openConsole brings vm's open VMConnect window to the front, or else opens VMConnect for vm through consoleTask,
 // without a UAC prompt. A second VMConnect for the same VM would ask to take over the console connection.
 func openConsole(vm string) error {
+	return requestConsole(vm, "open")
+}
+
+func requestConsole(vm, mode string) error {
 	vms, err := (&broker.Client{}).ListVMs()
 	if err != nil {
 		return err
@@ -37,8 +44,11 @@ func openConsole(vm string) error {
 	if err := checkConsoleVM(vm, vms); err != nil {
 		return err
 	}
-	if focusConsole(vm) {
-		return nil
+	var id string
+	for _, v := range vms {
+		if v.Name == vm {
+			id = v.ID
+		}
 	}
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -71,7 +81,7 @@ func openConsole(vm string) error {
 		return fmt.Errorf("the %q task is missing; run hyperhand.exe install again: %w", consoleTask, err)
 	}
 	defer task.Clear()
-	run, err := oleutil.CallMethod(task.ToIDispatch(), "Run", vm)
+	run, err := oleutil.CallMethod(task.ToIDispatch(), "Run", mode+":"+id)
 	if err != nil {
 		return err
 	}
@@ -79,9 +89,8 @@ func openConsole(vm string) error {
 	return nil
 }
 
-// checkConsoleVM allows only the exact name of an existing VM, which the task passes to vmconnect.exe inside quotes
-// (a trailing backslash would escape the closing quote). It guards the tray's own requests only: any process of the
-// user can run the task with any argument.
+// checkConsoleVM preserves the tray's accepted VM-name syntax and requires an exact existing name. The task itself
+// receives a GUID and independently resolves it, rather than treating the caller's name as a command-line argument.
 func checkConsoleVM(vm string, vms []hyperv.VM) error {
 	if vm == "" || strings.ContainsAny(vm, "\"\r\n") || strings.HasSuffix(vm, `\`) {
 		return fmt.Errorf("invalid VM name %q", vm)
@@ -101,6 +110,8 @@ var (
 	pIsIconic            = user32.NewProc("IsIconic")
 	pGetWindowTextW      = user32.NewProc("GetWindowTextW")
 	pSetForegroundWindow = user32.NewProc("SetForegroundWindow")
+	pConsoleSetWindowPos = user32.NewProc("SetWindowPos")
+	pConsoleAttachInput  = user32.NewProc("AttachThreadInput")
 	pSwitchToThisWindow  = user32.NewProc("SwitchToThisWindow")
 	enumMu               sync.Mutex // the EnumWindows callback below is shared
 	enumFound            []windows.HWND
@@ -110,21 +121,140 @@ var (
 	})
 )
 
-// focusConsole brings an open VMConnect window for vm to the front and reports whether it found one. VMConnect runs
-// elevated, so this process cannot show or restore it with ShowWindow (UIPI); SetForegroundWindow and
-// SwitchToThisWindow still work.
+// focusConsole runs in the elevated console helper, at the same integrity level as VMConnect.
 func focusConsole(vm string) bool {
-	system, err := windows.GetSystemDirectory()
-	if err != nil {
+	h := consoleWindow(vm)
+	if h == 0 {
 		return false
 	}
+	if r, _, _ := pIsIconic.Call(uintptr(h)); r != 0 {
+		pSwitchToThisWindow.Call(uintptr(h), 1)
+	}
+	if err := raiseConsole(h); err != nil {
+		log.Printf("console: %v", err)
+		return false
+	}
+	return true
+}
+
+// Raise the viewer without changing its size, position or topmost status.
+// Windows can refuse foreground activation; it is not evidence that the video is disconnected.
+func raiseConsole(h windows.HWND) error {
+	const flags = 0x0001 | 0x0002 | 0x0010 | 0x0040 | 0x4000 // NOSIZE | NOMOVE | NOACTIVATE | SHOWWINDOW | ASYNCWINDOWPOS
+	if ok, _, err := pConsoleSetWindowPos.Call(uintptr(h), 0, 0, 0, 0, 0, flags); ok == 0 {
+		return fmt.Errorf("raise VMConnect window %d: %w", h, err)
+	}
+	pSetForegroundWindow.Call(uintptr(h))
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if windows.GetForegroundWindow() == h {
+			return nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	vm, ok := consoleTitleVM(windowText(h))
+	var pid uint32
+	if _, err := windows.GetWindowThreadProcessId(h, &pid); err != nil || !ok || pid == 0 {
+		return errors.New("VMConnect focus target disappeared")
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	// Attached input queues make activation synchronous. Isolate that attempt so a hung
+	// foreground application cannot keep the console task and its VM mutex alive indefinitely.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, self, "--hyperhand-console-focus-helper", vm, strconv.FormatUint(uint64(h), 10), strconv.FormatUint(uint64(pid), 10))
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		return fmt.Errorf("VMConnect foreground activation: %w", ctx.Err())
+	}
+	if err != nil {
+		return fmt.Errorf("VMConnect foreground activation: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if foreground := windows.GetForegroundWindow(); foreground != h {
+		return fmt.Errorf("VMConnect window %d did not remain in the foreground (current window %d)", h, foreground)
+	}
+	return nil
+}
+
+func parseConsoleFocusRequest(args []string) (string, windows.HWND, uint32, error) {
+	if len(args) != 3 || args[0] == "" || strings.ContainsAny(args[0], "\x00\"\r\n") || strings.HasSuffix(args[0], `\`) {
+		return "", 0, 0, errors.New("invalid VMConnect focus request")
+	}
+	for _, value := range args[1:] {
+		if value == "" || strings.Trim(value, "0123456789") != "" {
+			return "", 0, 0, errors.New("invalid VMConnect focus identity")
+		}
+	}
+	h, hErr := strconv.ParseUint(args[1], 10, strconv.IntSize)
+	pid, pidErr := strconv.ParseUint(args[2], 10, 32)
+	if hErr != nil || pidErr != nil || h == 0 || pid == 0 {
+		return "", 0, 0, errors.New("invalid VMConnect focus identity")
+	}
+	return args[0], windows.HWND(h), uint32(pid), nil
+}
+
+func consoleFocusTargetMatches(vm string, pid, currentPID uint32, title, image, system, localHost string) bool {
+	name, ok := consoleTitleVMForHost(title, localHost)
+	return pid != 0 && pid == currentPID && ok && name == vm &&
+		strings.EqualFold(image, filepath.Join(system, "vmconnect.exe"))
+}
+
+func consoleFocusCommand(args []string) error {
+	vm, h, pid, err := parseConsoleFocusRequest(args)
+	if err != nil {
+		return err
+	}
+	system, err := windows.GetSystemDirectory()
+	if err != nil {
+		return err
+	}
+	localHost, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+	image, title := windowProcessImage(h), windowText(h)
+	var currentPID uint32
+	if _, err := windows.GetWindowThreadProcessId(h, &currentPID); err != nil ||
+		!consoleFocusTargetMatches(vm, pid, currentPID, title, image, system, localHost) {
+		return errors.New("VMConnect focus target identity changed")
+	}
+	// A task-launched process may lack foreground permission. Temporarily share the current
+	// foreground and viewer input queues for activation; do not inject keys or mouse input.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	foregroundThread, _ := windows.GetWindowThreadProcessId(windows.GetForegroundWindow(), nil)
+	viewerThread, _ := windows.GetWindowThreadProcessId(h, nil)
+	thread := windows.GetCurrentThreadId()
+	if viewerThread != 0 && viewerThread != thread && viewerThread != foregroundThread {
+		attached, _, _ := pConsoleAttachInput.Call(uintptr(thread), uintptr(viewerThread), 1)
+		if attached != 0 {
+			defer pConsoleAttachInput.Call(uintptr(thread), uintptr(viewerThread), 0)
+		}
+	}
+	if foregroundThread != 0 && foregroundThread != thread {
+		attached, _, _ := pConsoleAttachInput.Call(uintptr(thread), uintptr(foregroundThread), 1)
+		if attached != 0 {
+			defer pConsoleAttachInput.Call(uintptr(thread), uintptr(foregroundThread), 0)
+		}
+	}
+	pSetForegroundWindow.Call(uintptr(h))
+	if foreground := windows.GetForegroundWindow(); foreground != h {
+		return fmt.Errorf("VMConnect window %d could not be brought to the foreground (current window %d)", h, foreground)
+	}
+	return nil
+}
+
+func consoleWindow(vm string) windows.HWND {
+	system, err := windows.GetSystemDirectory()
+	if err != nil {
+		return 0
+	}
 	vmconnect := filepath.Join(system, "vmconnect.exe")
-	enumMu.Lock()
-	enumFound = nil
-	pEnumWindows.Call(enumCallback, 0)
-	found := enumFound
-	enumMu.Unlock()
-	for _, h := range found {
+	for _, h := range consoleWindows(0) {
 		if r, _, _ := pIsWindowVisible.Call(uintptr(h)); r == 0 {
 			continue
 		}
@@ -134,13 +264,9 @@ func focusConsole(vm string) bool {
 		if name, ok := consoleTitleVM(windowText(h)); !ok || name != vm {
 			continue
 		}
-		if r, _, _ := pIsIconic.Call(uintptr(h)); r != 0 {
-			pSwitchToThisWindow.Call(uintptr(h), 1)
-		}
-		pSetForegroundWindow.Call(uintptr(h))
-		return true
+		return h
 	}
-	return false
+	return 0
 }
 
 func windowText(h windows.HWND) string {
@@ -167,25 +293,25 @@ func windowProcessImage(h windows.HWND) string {
 	return windows.UTF16ToString(buf[:n])
 }
 
-// consoleTitleVM extracts the VM name from the title of a VMConnect window opened for "localhost", such as
-// "Win10 on localhost - Virtual Machine Connection" or the localized "localhost 上的 Win10 - 虚拟机连接": before the
-// last " - ", the host and the one word joining it to the VM name are dropped. A title in another layout gives false,
-// and the console is then opened anew rather than another VM's window being taken for it.
+// consoleTitleVM accepts the local host's English and Chinese VMConnect title layouts. A remote host with a VM of
+// the same name must not be mistaken for the local viewer that recovery is allowed to close.
 func consoleTitleVM(title string) (string, bool) {
-	const host = "localhost"
-	i := strings.LastIndex(title, " - ")
-	if i < 0 {
-		return "", false
+	host, _ := os.Hostname()
+	return consoleTitleVMForHost(title, host)
+}
+
+func consoleTitleVMForHost(title, localHost string) (string, bool) {
+	local := func(host string) bool {
+		return strings.EqualFold(host, "localhost") || localHost != "" && strings.EqualFold(host, localHost)
 	}
-	p := title[:i]
-	if rest, ok := strings.CutPrefix(p, host+" "); ok { // "localhost 上的 Win10"
-		if _, name, ok := strings.Cut(rest, " "); ok && name != "" {
+	if p, ok := strings.CutSuffix(title, " - 虚拟机连接"); ok {
+		if host, name, ok := strings.Cut(p, " 上的 "); ok && name != "" && local(host) {
 			return name, true
 		}
 	}
-	if rest, ok := strings.CutSuffix(p, " "+host); ok { // "Win10 on localhost"
-		if j := strings.LastIndex(rest, " "); j > 0 {
-			return rest[:j], true
+	if p, ok := strings.CutSuffix(title, " - Virtual Machine Connection"); ok {
+		if j := strings.LastIndex(p, " on "); j > 0 && local(p[j+4:]) {
+			return p[:j], true
 		}
 	}
 	return "", false

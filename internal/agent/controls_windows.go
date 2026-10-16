@@ -108,6 +108,7 @@ func validateControlsWindow(a proto.ControlsArgs) error {
 // has locked.
 type uiaSession struct {
 	automation, root, walker *ole.IUnknown
+	cache                    *ole.IUnknown
 }
 
 func openUIA() (*uiaSession, error) {
@@ -135,7 +136,7 @@ func openUIA() (*uiaSession, error) {
 }
 
 func (s *uiaSession) close() {
-	for _, o := range []*ole.IUnknown{s.walker, s.root, s.automation} {
+	for _, o := range []*ole.IUnknown{s.cache, s.walker, s.root, s.automation} {
 		if o != nil {
 			o.Release()
 		}
@@ -179,6 +180,10 @@ func (s *uiaSession) focused() (*nativeControl, error) {
 
 // UIA reports physical screen coordinates.
 func collectControls(a proto.ControlsArgs) (proto.ControlsResult, error) {
+	return collectControlsCached(a, true)
+}
+
+func collectControlsCached(a proto.ControlsArgs, cached bool) (proto.ControlsResult, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	if err := validateControlsWindow(a); err != nil {
@@ -205,8 +210,8 @@ func collectControls(a proto.ControlsArgs) (proto.ControlsResult, error) {
 		defer e.release()
 	}
 	walkRoot := e
-	if uiaCacheTree {
-		c, err := s.cacheSubtree(e, false)
+	if cached {
+		c, err := s.cacheElement(e, nil)
 		if err != nil {
 			return proto.ControlsResult{}, err
 		}
@@ -453,44 +458,41 @@ var valuePatternIndex = patternFor("SetValue")
 
 type nativeControl struct {
 	element, walker *ole.IUnknown
-	cached, partial bool // partial: only the search selectors are cached
-	siblings        *cachedSiblings
+	cache           *ole.IUnknown // borrowed from the session; only this element's properties are cached
+	partial         bool          // only the search selectors are cached
 }
 
 func (e *nativeControl) release() {
 	e.element.Release()
-	if e.siblings != nil {
-		e.siblings.array.Release()
-	}
 }
 
 // slot maps a get_CurrentX slot to get_CachedX on a cached element.
 func (e *nativeControl) slot(current int) int {
-	if e.cached {
+	if e.cache != nil && current != uiaName {
 		return current + uiaCachedOffset
 	}
 	return current
 }
 func (e *nativeControl) relative(slot int) (controlElement, error) {
 	var out *ole.IUnknown
-	if err := uiaCall(e.walker, slot, uintptr(unsafe.Pointer(e.element)), uintptr(unsafe.Pointer(&out))); err != nil {
+	var err error
+	if e.cache != nil {
+		err = uiaCall(e.walker, slot+uiaWalkerCacheOffset, uintptr(unsafe.Pointer(e.element)), uintptr(unsafe.Pointer(e.cache)), uintptr(unsafe.Pointer(&out)))
+	} else {
+		err = uiaCall(e.walker, slot, uintptr(unsafe.Pointer(e.element)), uintptr(unsafe.Pointer(&out)))
+	}
+	if err != nil {
 		return nil, err
 	}
 	if out == nil {
 		return nil, nil
 	}
-	return &nativeControl{element: out, walker: e.walker}, nil
+	return &nativeControl{element: out, walker: e.walker, cache: e.cache, partial: e.partial}, nil
 }
 func (e *nativeControl) first() (controlElement, error) {
-	if e.cached {
-		return e.cachedFirst()
-	}
 	return e.relative(uiaFirstChild)
 }
 func (e *nativeControl) next() (controlElement, error) {
-	if e.cached {
-		return e.cachedNext()
-	}
 	return e.relative(uiaNextSibling)
 }
 func (e *nativeControl) integer(slot int) (int32, error) {
@@ -527,7 +529,7 @@ func bstrText(s *int16) (string, bool, error) {
 func (e *nativeControl) property(id int32) (ole.VARIANT, error) {
 	var v ole.VARIANT
 	slot := uiaGetPropertyValue
-	if e.cached {
+	if e.cache != nil && id != propValueValue {
 		slot = uiaGetCachedProperty
 	}
 	err := uiaCall(e.element, slot, uintptr(id), uintptr(unsafe.Pointer(&v)))
@@ -539,7 +541,7 @@ func (e *nativeControl) property(id int32) (ole.VARIANT, error) {
 func (e *nativeControl) stateProperty(id int32) (ole.VARIANT, error) {
 	var v ole.VARIANT
 	slot := uiaGetPropertyValueEx
-	if e.cached {
+	if e.cache != nil && id != propValueValue {
 		slot = uiaGetCachedPropertyEx
 	}
 	err := uiaCall(e.element, slot, uintptr(id), 1, uintptr(unsafe.Pointer(&v)))
@@ -653,7 +655,7 @@ func destroySafeArray(a *safeArray) { pSafeArrayDestroy.Call(uintptr(unsafe.Poin
 
 // runtimeID reads GetRuntimeId (a SAFEARRAY of int32).
 func (e *nativeControl) runtimeID() ([]int32, error) {
-	if e.cached {
+	if e.cache != nil {
 		return e.cachedRuntimeID()
 	}
 	var arr *safeArray

@@ -259,9 +259,11 @@ func logonTaskXML(hostExe string, owner setupIdentity) string {
 </Task>`
 }
 
-// consoleTaskXML defines consoleTask: no trigger, run on demand with the VM name as $(Arg0), with the owner's full
+// consoleTaskXML defines consoleTask: no trigger, run on demand with mode:VM-GUID as $(Arg0), with the owner's full
 // token, in parallel for several VMs.
-func consoleTaskXML(vmconnect string, owner setupIdentity) string {
+const consoleTaskArgs = `console "$(Arg0)"`
+
+func consoleTaskXML(hostExe string, owner setupIdentity) string {
 	return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Principals>
@@ -280,8 +282,8 @@ func consoleTaskXML(vmconnect string, owner setupIdentity) string {
   <Triggers />
   <Actions Context="Author">
     <Exec>
-      <Command>` + xmlEscape(vmconnect) + `</Command>
-      <Arguments>localhost "$(Arg0)"</Arguments>
+      <Command>` + xmlEscape(hostExe) + `</Command>
+      <Arguments>` + xmlEscape(consoleTaskArgs) + `</Arguments>
     </Exec>
   </Actions>
 </Task>`

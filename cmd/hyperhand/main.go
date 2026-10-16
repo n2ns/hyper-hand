@@ -31,6 +31,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--hyperhand-console-focus-helper" {
+		if err := consoleFocusCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "service" {
 		if err := broker.Run(); err != nil {
 			log.Print("service: ", err)
@@ -61,6 +68,13 @@ func main() {
 		if err := startupCommand(os.Args[2:]); err != nil {
 			log.Print("startup: ", err)
 			msgBox("Changing Windows startup failed:\n"+err.Error(), windows.MB_ICONERROR)
+			os.Exit(1)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "console" {
+		if err := consoleCommand(os.Args[2:]); err != nil {
+			log.Print("console: ", err)
 			os.Exit(1)
 		}
 		return
@@ -136,6 +150,12 @@ func main() {
 					}
 				}()
 			}
+		}, AfterConsoleReady: func(vm string) {
+			go func() {
+				if err := requestConsole(vm, "recover"); err != nil {
+					log.Print("recover console: ", err)
+				}
+			}()
 		}})
 		mux := http.NewServeMux()
 		mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil))

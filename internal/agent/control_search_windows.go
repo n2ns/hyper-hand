@@ -10,6 +10,10 @@ import (
 )
 
 func collectFindControls(a proto.FindControlsArgs) (proto.FindControlsResult, error) {
+	return collectFindControlsCached(a, true)
+}
+
+func collectFindControlsCached(a proto.FindControlsArgs, cached bool) (proto.FindControlsResult, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	ca := proto.ControlsArgs{Handle: a.Handle, PID: a.PID}
@@ -37,8 +41,8 @@ func collectFindControls(a proto.FindControlsArgs) (proto.FindControlsResult, er
 		defer e.release()
 	}
 	searchRoot := e
-	if uiaCacheTree {
-		c, err := s.cacheSubtree(e, true)
+	if cached {
+		c, err := s.cacheElement(e, &a)
 		if err != nil {
 			return proto.FindControlsResult{}, err
 		}

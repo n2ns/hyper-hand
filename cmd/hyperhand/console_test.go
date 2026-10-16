@@ -38,13 +38,31 @@ func TestConsoleTitleVM(t *testing.T) {
 		{"localhost 上的 Win10 Test - 虚拟机连接", "Win10 Test", true},
 		{"localhost 上的 A - B - 虚拟机连接", "A - B", true}, // the product name follows the last " - "
 		{"localhost on localhost - Virtual Machine Connection", "localhost", true},
+		{"TEST-HOST 上的 Win10-Example - 虚拟机连接", "Win10-Example", true},
+		{"Win10-Example on TEST-HOST - Virtual Machine Connection", "Win10-Example", true},
+		{"test-host 上的 Win10-Example - 虚拟机连接", "Win10-Example", true},
+		{"LOCALHOST 上的 Win10-Example - 虚拟机连接", "Win10-Example", true},
+		{"TEST-HOST 上的 Test on Other - 虚拟机连接", "Test on Other", true},
+		{"Test on Other on TEST-HOST - Virtual Machine Connection", "Test on Other", true},
+		{"Test 上的 Other on TEST-HOST - Virtual Machine Connection", "Test 上的 Other", true},
+		{"TEST-HOST 上的 Test 上的 Other - 虚拟机连接", "Test 上的 Other", true},
+		{"OTHER 上的 Test on TEST-HOST - 虚拟机连接", "", false},
+		{"TEST-HOST 上的 Test on OTHER - Virtual Machine Connection", "", false},
+		{"OTHER 上的 Win10-Example - 虚拟机连接", "", false},
+		{"Win10-Example on OTHER - Virtual Machine Connection", "", false},
+		{"TEST-HOST2 上的 Win10-Example - 虚拟机连接", "", false},
+		{"TEST-HOST wrong Win10-Example - 虚拟机连接", "", false},
+		{"TEST-HOST 上的  - 虚拟机连接", "", false},
 		{"虚拟机连接", "", false},
 		{"Win10 - Virtual Machine Connection", "", false},
 		{"localhost - Virtual Machine Connection", "", false},
 	} {
-		if got, ok := consoleTitleVM(c.title); got != c.want || ok != c.ok {
+		if got, ok := consoleTitleVMForHost(c.title, "TEST-HOST"); got != c.want || ok != c.ok {
 			t.Errorf("%q: %q %v, want %q %v", c.title, got, ok, c.want, c.ok)
 		}
+	}
+	if _, ok := consoleTitleVMForHost("Win10 on TEST-HOST - Virtual Machine Connection", ""); ok {
+		t.Fatal("accepted an unknown hostname")
 	}
 }
 

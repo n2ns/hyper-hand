@@ -129,6 +129,28 @@ func TestControlsHelperProcess(t *testing.T) {
 			os.Exit(1)
 		}
 		os.Exit(0)
+	case "serve_uncached":
+		var req helperRequest
+		err := json.NewDecoder(os.Stdin).Decode(&req)
+		var reply helperReply
+		if err == nil {
+			if req.Find != nil {
+				var r proto.FindControlsResult
+				r, err = collectFindControlsCached(*req.Find, false)
+				reply.Find = &r
+			} else {
+				var r proto.ControlsResult
+				r, err = collectControlsCached(*req.Controls, false)
+				reply.Controls = &r
+			}
+		}
+		if err != nil {
+			reply = helperReply{Error: err.Error()}
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(reply); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
 	}
 }
 
@@ -163,10 +185,14 @@ func TestControlsSubprocessCancellation(t *testing.T) {
 // pumpHelper runs one helper request in a test subprocess while this thread services the messages of its test
 // windows, which the helper's UIA provider needs.
 func pumpHelper(t *testing.T, req helperRequest) (helperReply, error) {
+	return pumpControlsHelper(t, req, "serve")
+}
+
+func pumpControlsHelper(t *testing.T, req helperRequest, mode string) (helperReply, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := controlsTestCommand(t, ctx, "serve")
+	cmd := controlsTestCommand(t, ctx, mode)
 	type outcome struct {
 		r   helperReply
 		err error
