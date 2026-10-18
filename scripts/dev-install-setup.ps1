@@ -1,18 +1,17 @@
 # One-time registration (or removal) of the on-demand task "HyperHand Dev Install", which lets
-# `go run ./cmd/hyperhand dev-install` (run from the repository root) install development builds of this checkout
-# without a UAC prompt. Run once from an elevated PowerShell opened as the developer who will run dev-install (that is
+# `scripts/dev-install.sh` (from WSL) or `hyperhand.exe dev-install` install development builds without a UAC prompt. Run once from an elevated PowerShell opened as the developer who will run dev-install (that is
 # the one UAC approval):
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-install-setup.ps1 [-Mode Enable|Remove]
 #
-# The task runs <checkout>\build\dev-install\hyperhand.exe install --quiet with that user's elevated token, has no
-# triggers (demand start only) and can be changed or removed only elevated. Trust: anyone who can replace that file and
+# The task runs %LOCALAPPDATA%\HyperHandDev\hyperhand.exe install --quiet (dev-install copies each build there) with
+# that user's elevated token, has no triggers (demand start only) and can be changed or removed only elevated. Trust: anyone who can replace that file and
 # start the task runs code as an administrator. Remove it when development no longer needs it. It never replaces an
 # existing task of the same name that runs something else.
 param([ValidateSet('Enable', 'Remove')][string]$Mode = 'Enable')
 $ErrorActionPreference = 'Stop'
 $taskName = 'HyperHand Dev Install'
-$candidate = Join-Path (Split-Path $PSScriptRoot -Parent) 'build\dev-install\hyperhand.exe'
+$candidate = Join-Path $env:LOCALAPPDATA 'HyperHandDev\hyperhand.exe'
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not ([Security.Principal.WindowsPrincipal]::new($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -39,10 +38,10 @@ if ($Mode -eq 'Remove') {
     Write-Output "removed '$taskName' (HyperHand itself stays installed)"
     exit 0
 }
-if ($null -ne $task) { Write-Output "'$taskName' is already registered for this checkout and user"; exit 0 }
+if ($null -ne $task) { Write-Output "'$taskName' is already registered for this user"; exit 0 }
 
 $d = $scheduler.NewTask(0)
-$d.RegistrationInfo.Description = "HyperHand development install for $candidate (go run ./cmd/hyperhand dev-install). Runs that file elevated on demand."
+$d.RegistrationInfo.Description = "HyperHand development install for $candidate (hyperhand.exe dev-install). Runs that file elevated on demand."
 $d.Principal.UserId = $owner
 $d.Principal.LogonType = 3          # interactive token: the developer must be signed in
 $d.Principal.RunLevel = 1           # highest available
@@ -65,4 +64,4 @@ if ($r.Principal.RunLevel -ne 1 -or $r.Triggers.Count -ne 0 -or $r.Actions.Item(
     Write-Error 'The registered task differs from what was requested; inspect it in Task Scheduler.' -ErrorAction Continue
     exit 1
 }
-Write-Output "registered '$taskName'; install builds with go run ./cmd/hyperhand dev-install from the repository root (no UAC)"
+Write-Output "registered '$taskName'; install builds with scripts/dev-install.sh from WSL (no UAC)"

@@ -115,6 +115,32 @@ func TestDevInstallRefusesOutsideRepository(t *testing.T) {
 	}
 }
 
+func TestStageBuild(t *testing.T) {
+	build, stage := t.TempDir(), filepath.Join(t.TempDir(), "HyperHandDev")
+	if err := stageBuild(build, stage); err == nil || !strings.Contains(err.Error(), "build first") {
+		t.Fatalf("empty build: %v", err)
+	}
+	for _, name := range []string{"hyperhand.exe", "hyperhand-agent.exe"} {
+		if err := os.WriteFile(filepath.Join(build, name), []byte("new "+name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(stage, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stage, "hyperhand.exe"), []byte("old build, longer than the new one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := stageBuild(build, stage); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"hyperhand.exe", "hyperhand-agent.exe"} {
+		if b, err := os.ReadFile(filepath.Join(stage, name)); err != nil || string(b) != "new "+name {
+			t.Errorf("%s: %q %v", name, b, err)
+		}
+	}
+}
+
 // A past run that COM reports as a local time labelled UTC can look hours in the future (UTC+7 host: 01:16 local read
 // as 01:16 UTC); dev-install then waited for hours before starting the task (2026-10-11). The gap is at most 2 s.
 func TestRunGapIsBounded(t *testing.T) {

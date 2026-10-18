@@ -20,8 +20,9 @@ import (
 )
 
 // devInstallTask is the on-demand task scripts\dev-install-setup.ps1 registers: it runs
-// <repo>\build\dev-install\hyperhand.exe install --quiet with the developer's elevated token, so development builds
-// install without a UAC prompt.
+// %LOCALAPPDATA%\HyperHandDev\hyperhand.exe install --quiet with the developer's elevated token, so development builds
+// install without a UAC prompt. dev-install copies the build from <repo>\build\dev-install there first, so the task
+// runs a local file also when the checkout is in WSL.
 const devInstallTask = "HyperHand Dev Install"
 
 // Task Scheduler TASK_STATE values that mean a run is pending or in progress.
@@ -31,7 +32,7 @@ const (
 )
 
 // devInstallCommand implements hyperhand.exe dev-install [--no-build] [--timeout <seconds>], meant to be run from the
-// repository root as go run ./cmd/hyperhand dev-install. Progress goes to stdout, the error to stderr; the exit code
+// repository root, from WSL as scripts/dev-install.sh (which builds and passes --no-build). Progress goes to stdout, the error to stderr; the exit code
 // is 0 only when the build is installed, the service runs and exactly one installed tray process is up.
 func devInstallCommand(args []string) int {
 	if err := devInstall(args, os.Stdout); err != nil {
@@ -59,7 +60,11 @@ func devInstall(args []string, out io.Writer) error {
 	if b, err := os.ReadFile(filepath.Join(repo, "go.mod")); err != nil || !strings.HasPrefix(strings.TrimSpace(string(b)), "module hyperhand") {
 		return fmt.Errorf("%s is not the HyperHand repository root; run go run ./cmd/hyperhand dev-install from there", repo)
 	}
-	candidateDir := filepath.Join(repo, "build", "dev-install")
+	buildDir := filepath.Join(repo, "build", "dev-install")
+	candidateDir, err := devStageDir()
+	if err != nil {
+		return err
+	}
 	candidate := filepath.Join(candidateDir, "hyperhand.exe")
 	paths, err := installPaths()
 	if err != nil {
@@ -97,11 +102,14 @@ func devInstall(args []string, out io.Writer) error {
 	}
 
 	if !*noBuild {
-		version, err := devBuild(repo, candidateDir)
+		version, err := devBuild(repo, buildDir)
 		if err != nil {
 			return err
 		}
 		fmt.Fprintln(out, "built", version)
+	}
+	if err := stageBuild(buildDir, candidateDir); err != nil {
+		return err
 	}
 	hashes := map[string]string{}
 	for _, name := range []string{"hyperhand.exe", "hyperhand-agent.exe"} {
@@ -110,7 +118,7 @@ func devInstall(args []string, out io.Writer) error {
 			return err
 		}
 		if h == "" {
-			return fmt.Errorf("missing %s; build first (run without --no-build)", filepath.Join(candidateDir, name))
+			return fmt.Errorf("missing %s after staging", filepath.Join(candidateDir, name))
 		}
 		hashes[name] = h
 	}
@@ -169,6 +177,35 @@ func devInstall(args []string, out io.Writer) error {
 		return fmt.Errorf("expected one installed tray process (%s), found %d", paths.hostExe, len(pids))
 	}
 	fmt.Fprintf(out, "installed without UAC: service running, tray pid %d. Next: vm_update_agent for each VM.\n", pids[0])
+	return nil
+}
+
+// devStageDir is the local directory the install task runs the build from: %LOCALAPPDATA%\HyperHandDev.
+func devStageDir() (string, error) {
+	local := os.Getenv("LOCALAPPDATA")
+	if local == "" {
+		return "", errors.New("LOCALAPPDATA is not set")
+	}
+	return filepath.Join(local, "HyperHandDev"), nil
+}
+
+// stageBuild copies both executables from the build directory into dir, replacing earlier copies.
+func stageBuild(buildDir, dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	for _, name := range []string{"hyperhand.exe", "hyperhand-agent.exe"} {
+		b, err := os.ReadFile(filepath.Join(buildDir, name))
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("missing %s; build first (scripts/dev-install.sh, or run without --no-build)", filepath.Join(buildDir, name))
+		}
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), b, 0o755); err != nil {
+			return fmt.Errorf("stage %s: %w", name, err)
+		}
+	}
 	return nil
 }
 
