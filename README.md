@@ -73,7 +73,7 @@ The [user guide](docs/user-guide.md) covers optional guest setup, updates and tr
 - **Checkpoints**: create, restore, keep and delete checkpoints. Task cleanup removes temporary checkpoints, with optional automatic cleanup via [client hooks](docs/hooks/).
 - **Desktop readiness**: wait for the guest agent and an unlocked session. Unlock an already signed-in session using a password stored in Windows Credential Manager on the host, without returning it to the AI.
 
-See the [tool reference](docs/features.md) for exact behavior and the [acceptance results](docs/acceptance-v0.2.0.md) for tested environments and workflows.
+See the [tool reference](docs/features.md) for exact behavior.
 
 ## How it works
 
@@ -96,6 +96,7 @@ HyperHand has two executables and three roles:
 - Commands that run as administrator need the guest's UAC set to elevate without prompting; otherwise the UAC prompt waits in the guest.
 - Programs that draw their own controls show no buttons or fields to read; the AI then works from the screenshot alone.
 - Deleting a checkpoint merges its disk changes, which can take minutes.
+- Tested with Windows 10 guests at 1920 x 1080 in a basic console session, with AutoCAD 2015 as the main desktop application. Multiple monitors, non-default DPI and network remote desktop sessions have not been tested.
 
 ## Privacy and security
 
@@ -114,7 +115,6 @@ Uninstall the guest agent first, then the host: run `%LOCALAPPDATA%\HyperHand\hy
 - [Building HyperHand](docs/building.md): building from source, testing, development installs and releasing.
 - [Privacy](docs/privacy.md): what is stored and what goes over the wire.
 - [Python client](client/README.md): calling HyperHand from scripts without an MCP client.
-- [v0.2.0 acceptance](docs/acceptance-v0.2.0.md): tested environments and results.
 - [Changelog](CHANGELOG.md)
 
 ## License
