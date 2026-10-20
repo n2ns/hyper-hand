@@ -76,7 +76,7 @@ The HTTP timeout is the sum of the steps' timeouts, so long steps need no `--tim
 ## Module
 
 ```python
-import sys; sys.path.insert(0, r"C:\path\to\hyper-hand\client")
+import sys; sys.path.insert(0, r"D:\_Dev\WorkSpace\HyperHand\client")
 from hyperhand_client import HyperHand, HyperHandError
 
 with HyperHand(vm="Win10") as hh:            # task_id: hh.task_id (generated); pass task_id=... to continue one
