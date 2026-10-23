@@ -44,6 +44,7 @@ Which document owns which kind of information, and the rules for keeping them. R
 - Upstream facts found while developing or testing go to `docs/research/` with their date, environment and source, and say whether they were observed at runtime or read from documentation or sources. Features states the behavior and may link the fact it rests on; re-check affected facts after Windows, Hyper-V or AutoCAD updates.
 - TODO holds only unfinished work. Remove an item when it is done or decided; move what still holds to its owner (behavior to Features, facts to research).
 - A documentation reorganization does not by itself verify an old claim or TODO item.
+- Keep consumer-project deployment and integration records in that project's private documentation. Keep actual machine identities and VM mappings in private/local notes; public examples and test fixtures use synthetic identities. Preserve dates, methods and technical limits when anonymizing research.
 - Keep AGENTS.md short: add a rule only after an agent repeated a mistake or for a new safety boundary, and check it for outdated or conflicting rules when changing it.
 - All repository documents are written in English.
 - A new document gets a row in the tables above; a row linking a directory covers every file in it.

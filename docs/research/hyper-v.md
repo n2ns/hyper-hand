@@ -2,7 +2,7 @@
 
 Facts about Hyper-V, its WMI and PowerShell interfaces and Virtual Machine Connection (VMConnect) that HyperHand's behavior rests on, each with the date, environment and how it was obtained. The behavior built on them is in [Features](../features.md). **Re-verify the affected facts after a Windows or Hyper-V update on the host.**
 
-Environment unless stated otherwise: the development host (Windows with Hyper-V, Chinese UI), guests `Win10` and `Win10-Example` (Windows 10, 1920 x 1080, basic console session).
+Environment unless stated otherwise: the development host (Windows with Hyper-V, Chinese UI), general-test and AutoCAD-test guests (Windows 10, 1920 x 1080, basic console session at the time of these measurements).
 
 ## Facts
 
@@ -29,7 +29,7 @@ Runtime on `Win10`, 2026-10-15: host with enhanced session mode allowed (`Set-VM
 
 ### VMConnect
 
-Runtime and resource inspection on the host, 2026-10-16, guest `Win10-Example`. Used by [9. Host tray](../features/host-tray.md) (viewer recovery).
+Runtime and resource inspection on the host, 2026-10-16, using the AutoCAD test guest. Used by [9. Host tray](../features/host-tray.md) (viewer recovery).
 
 11. **Video surface classes.** A connected viewer's RDP area is a visible `OPWindowClass` (basic renderer) or `TscShellContainerClass` (shell renderer) window. A freshly started basic viewer had only `OPWindowClass`.
 12. **Status bar through UI Automation.** The status bar's ToolStrip items expose their text with empty AutomationIDs and empty runtime IDs. `LockIcon` is the internal WinForms control name, not a UIA AutomationID.

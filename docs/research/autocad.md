@@ -15,7 +15,7 @@ Facts about AutoCAD 2015 (English, trial) in a Windows 10 guest that HyperHand's
 
 5. **Main window size.** The main window has about 1,342 to 1,400 control-view nodes. Runtime, 2026-10-11 and 2026-10-16.
 6. **Drawing area.** The focused drawing-area `Pane` exposes no UIA patterns (`supported: []`); only clicks and keyboard input reach it. Runtime, 2026-10-11.
-7. **Ribbon tabs are buttons.** The ribbon's `Home` and `Insert` tabs are exposed as `Button` with Invoke, AutomationIDs `ACAD.ID_TabHome` and `ACAD.ID_TabInsert`. `TabItem` controls belong to the drawing and layout tabs. `Home` showed 72 visible ribbon commands and `Insert` 29. Runtime on `Win10-Example`, 2026-10-16.
+7. **Ribbon tabs are buttons.** The ribbon's `Home` and `Insert` tabs are exposed as `Button` with Invoke, AutomationIDs `ACAD.ID_TabHome` and `ACAD.ID_TabInsert`. `TabItem` controls belong to the drawing and layout tabs. `Home` showed 72 visible ribbon commands and `Insert` 29. Runtime in the Windows 10 AutoCAD test guest, 2026-10-16.
 8. **Standard dialogs.** `Select template` and `Select File` are `#32770` dialogs; `File name:` supports ValuePattern (Chinese text read back exactly), `Cancel` supports Invoke. In `Options`, the tab control is a `Tab` with AutomationId `1796` and 11 tab items; `Cancel` has AutomationId `2`. The floating command line's edit does not expose ValuePattern. Runtime, 2026-10-07 to 2026-10-11.
 
 ### Startup and busy states

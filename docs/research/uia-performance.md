@@ -8,7 +8,7 @@ About 1,400 control-view nodes. The agent's walk of that date read about 120 nod
 
 ## Per-element property caches (2026-10-16)
 
-Same-process A/B benchmark inside the guest (`Win10-Example`), three alternating rounds, 5,000-node / 64-depth observation limit; both modes returned identical results (1,342 nodes, same focus, selected text and search results). Times in ms:
+Same-process A/B benchmark inside the Windows 10 AutoCAD test guest, three alternating rounds, 5,000-node / 64-depth observation limit; both modes returned identical results (1,342 nodes, same focus, selected text and search results). Times in ms:
 
 | Operation | Without caches | With caches | Median |
 | --- | --- | --- | --- |

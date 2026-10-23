@@ -21,7 +21,7 @@ func eventually(t *testing.T, ctx context.Context, what string, f func() bool) {
 	}
 }
 
-// A client that opens and deletes one MCP session per call (like Example's Invoke-HyperHand.ps1) gets a new
+// A client that opens and deletes one MCP session per call gets a new
 // default task each time; deleting the session ends that task and releases its VM, so the next call can write.
 func TestTaskHTTPDeletedSessionReleasesDefaultTask(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

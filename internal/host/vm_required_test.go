@@ -34,7 +34,7 @@ func newTwoVMBackend(secondState string) *twoVMBackend {
 	return &twoVMBackend{
 		vms: []hyperv.VM{{Name: "Win10", ID: "id-win10", State: "Running"}, {Name: "Win10-Example", ID: "id-example", State: secondState}},
 		cps: map[string][]hyperv.Checkpoint{
-			"Win10":          {{ID: "w-base", Name: "baseline", Kind: "standard", State: "off"}, {ID: "w-old", Name: otherRunTemp, ParentID: "w-base", Kind: "standard", State: "off"}},
+			"Win10":         {{ID: "w-base", Name: "baseline", Kind: "standard", State: "off"}, {ID: "w-old", Name: otherRunTemp, ParentID: "w-base", Kind: "standard", State: "off"}},
 			"Win10-Example": {{ID: "p-base", Name: "baseline", Kind: "standard", State: "off"}, {ID: "p-old", Name: otherRunTemp, ParentID: "p-base", Kind: "standard", State: "off"}},
 		},
 	}

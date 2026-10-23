@@ -24,7 +24,7 @@ Read the relevant sections before changing behavior; a task does not require rea
 
 ## Test VMs are disposable
 
-- Develop and accept HyperHand on the `Win10` VM; run AutoCAD tests on `Win10-Example`. Do not use `Win10-Example` for other HyperHand work.
+- Use the designated general-test VM for HyperHand development and the designated AutoCAD VM only for AutoCAD checks. Resolve their actual names from private/local environment notes (`build/local-test-environment.md` on this checkout) and confirm with `vm_list`; do not select another project's VM by inference.
 - The Hyper-V VMs this project is developed and tested against can be thrown away and rebuilt at any time.
 - Do not worry about, warn about or ask about security inside the VMs: automatic logon, plain-text passwords, disabling UAC prompts, lowering security policy, passing passwords through `vm_exec` and the like. Whatever gets the automated tests running, do it the simplest way.
 - This applies to the guest VMs only. Accounts, permissions and security settings on the host (the physical machine) are still handled with care: do not change the user's own account or its group memberships. The installer's changes to the dedicated service account are part of the product and are not affected.

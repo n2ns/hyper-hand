@@ -18,7 +18,7 @@ Run these as described in [Manual verification](docs/manual-verification.md): ch
 - [ ] **Unlock with a mismatched stored password:** needs the stored unlock password in the user's Credential Manager changed (user decision).
 - [ ] **Host restart while a guest job runs:** a `vm_exec background: true` job survives a restart of the installed host and `vm_job` still reports its state and output. Not run on the installed host; reading a job from new sessions and tasks passed.
 - [ ] **Agent desktop tests on a locked host:** `TestWindowAt`, `TestFocusedHelper` and `TestControlHintNativeIdentityAndFallback` skip with a reason while the host session is locked; the skip itself was not exercised on a locked host.
-- [ ] **VMConnect viewer recovery edge cases:** fresh replacement, healthy reuse and raising a covered viewer passed on Win10-Example ([Hyper-V facts 11 to 14](docs/research/hyper-v.md#vmconnect)). Open: the activation helper's 3-second kill path with a deliberately hung GUI, unknown VMConnect dialogs, and VMConnect in UI languages other than English and Chinese.
+- [ ] **VMConnect viewer recovery edge cases:** fresh replacement, healthy reuse and raising a covered viewer passed on the AutoCAD test VM ([Hyper-V facts 11 to 14](docs/research/hyper-v.md#vmconnect)). Open: the activation helper's 3-second kill path with a deliberately hung GUI, unknown VMConnect dialogs, and VMConnect in UI languages other than English and Chinese.
 
 ## 2. Product scope decisions
 
