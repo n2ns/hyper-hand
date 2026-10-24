@@ -39,7 +39,7 @@ func observationFor(t *testing.T, data []byte, crop screenshotRegion, maxSize in
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &observation{ID: "o-test", HasImage: true, Crop: screenshotRegion{X: g.X, Y: g.Y, Width: g.Width, Height: g.Height}, Scale: g.ScaleX, OutputWidth: g.OutputWidth, OutputHgt: g.OutputHeight}
+	return &observation{ID: "o-test", HasImage: true, Crop: screenshotRegion{X: g.X, Y: g.Y, Width: g.Width, Height: g.Height}, Scale: g.ScaleX, ScaleY: g.ScaleY, OutputWidth: g.OutputWidth, OutputHgt: g.OutputHeight}
 }
 
 func TestObservationToScreenRoundTrip(t *testing.T) {
@@ -80,6 +80,30 @@ func TestObservationToScreenRoundTrip(t *testing.T) {
 		}
 		if _, _, err := o.toScreen(o.OutputWidth, 0); err == nil {
 			t.Error("accepted a pixel outside the image")
+		}
+	}
+}
+
+// TestObservationToScreenTokenBudget checks that image pixels of a default (token budget) observation map back to the
+// screen pixels they were sampled from, for the whole screen and a window crop.
+func TestObservationToScreenTokenBudget(t *testing.T) {
+	data, _ := screenshotFixture(t, 1920, 1080)
+	for _, crop := range []screenshotRegion{{Width: 1920, Height: 1080}, {X: 10, Y: 0, Width: 1900, Height: 1040}} {
+		o := observationFor(t, data, crop, 0)
+		if max(o.OutputWidth, o.OutputHgt) > budgetMaxSide || o.Scale >= 1 {
+			t.Fatalf("%+v: not scaled to the budget: %dx%d scale %v", crop, o.OutputWidth, o.OutputHgt, o.Scale)
+		}
+		for _, p := range [][2]int{{0, 0}, {o.OutputWidth - 1, o.OutputHgt - 1}, {o.OutputWidth / 2, o.OutputHgt / 3}} {
+			x, y, err := o.toScreen(p[0], p[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The same sample point transformScreenshot used for this output pixel.
+			wx := crop.X + min(crop.Width-1, int((float64(p[0])+0.5)*float64(crop.Width)/float64(o.OutputWidth)))
+			wy := crop.Y + min(crop.Height-1, int((float64(p[1])+0.5)*float64(crop.Height)/float64(o.OutputHgt)))
+			if x != wx || y != wy {
+				t.Errorf("%+v: image pixel %v maps to (%d, %d), sampled from (%d, %d)", crop, p, x, y, wx, wy)
+			}
 		}
 	}
 }

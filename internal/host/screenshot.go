@@ -19,8 +19,51 @@ type screenshotRegion struct {
 }
 
 type screenshotOptions struct {
-	Region  *screenshotRegion
+	Region *screenshotRegion
+	// MaxSize is the output size rule: 0 fits the image to the model token budget (fitTokenBudget), -1 keeps the
+	// original size, a positive value caps the longest side.
 	MaxSize int
+}
+
+// Token budget for the default image size, after Claude's image sizing: about one token per 28x28 pixel tile, at
+// most budgetMaxTokens tiles and budgetMaxSide pixels on the longest side.
+const (
+	budgetPxPerToken = 28
+	budgetMaxSide    = 1568
+	budgetMaxTokens  = 1568
+)
+
+func withinTokenBudget(w, h int) bool {
+	tiles := func(n int) int { return (n + budgetPxPerToken - 1) / budgetPxPerToken }
+	return max(w, h) <= budgetMaxSide && tiles(w)*tiles(h) <= budgetMaxTokens
+}
+
+// scaleLongestSide scales w x h so its longest side is long, preserving the aspect ratio with integer rounding and at
+// least one pixel per axis.
+func scaleLongestSide(w, h, long int) (int, int) {
+	if w >= h {
+		return long, max(1, int(math.Round(float64(h)*float64(long)/float64(w))))
+	}
+	return max(1, int(math.Round(float64(w)*float64(long)/float64(h)))), long
+}
+
+// fitTokenBudget returns w x h unchanged when it is within the token budget, else the largest size of the same aspect
+// ratio within it. It binary-searches the longest side (searching the width would fail for a 1-pixel-wide tall
+// image); both tile counts grow with it, and a longest side of 1 always fits.
+func fitTokenBudget(w, h int) (int, int) {
+	if withinTokenBudget(w, h) {
+		return w, h
+	}
+	lo, hi := 1, min(max(w, h), budgetMaxSide)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if withinTokenBudget(scaleLongestSide(w, h, mid)) {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	return scaleLongestSide(w, h, lo)
 }
 
 // clampRegion intersects a window rect (screen pixels) with a w x h screenshot. ok is false when nothing of the rect
@@ -50,8 +93,8 @@ type screenshotGeometry struct {
 
 func transformScreenshot(data []byte, opts screenshotOptions) ([]byte, screenshotGeometry, error) {
 	var g screenshotGeometry
-	if opts.MaxSize < 0 {
-		return nil, g, fmt.Errorf("max_size must not be negative")
+	if opts.MaxSize < -1 {
+		return nil, g, fmt.Errorf("max_size must be -1, 0 or positive")
 	}
 	src, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
@@ -67,14 +110,10 @@ func transformScreenshot(data []byte, opts screenshotOptions) ([]byte, screensho
 		return nil, g, fmt.Errorf("region must have positive dimensions and fit within the %dx%d screenshot", w, h)
 	}
 	ow, oh := r.Width, r.Height
-	if opts.MaxSize > 0 && max(ow, oh) > opts.MaxSize {
-		if ow >= oh {
-			oh = max(1, int(math.Round(float64(oh)*float64(opts.MaxSize)/float64(ow))))
-			ow = opts.MaxSize
-		} else {
-			ow = max(1, int(math.Round(float64(ow)*float64(opts.MaxSize)/float64(oh))))
-			oh = opts.MaxSize
-		}
+	if opts.MaxSize == 0 {
+		ow, oh = fitTokenBudget(ow, oh)
+	} else if opts.MaxSize > 0 && max(ow, oh) > opts.MaxSize {
+		ow, oh = scaleLongestSide(ow, oh, opts.MaxSize)
 	}
 	g = screenshotGeometry{
 		OriginalWidth: w, OriginalHeight: h,

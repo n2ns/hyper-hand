@@ -281,7 +281,13 @@ func TestObserveMaxSizeAndValidation(t *testing.T) {
 	if _, w, h := observe(t, ctx, cs, map[string]any{"vm": "CAD", "handle": 10, "max_size": 500}); w != 32 || h != 26 {
 		t.Errorf("upscaled to %dx%d", w, h)
 	}
-	for _, args := range []map[string]any{{"vm": "CAD", "max_size": -1}, {"vm": "CAD", "max_depth": 11}, {"vm": "CAD", "max_nodes": 1001}, {"vm": "CAD", "max_depth": -1}} {
+	// The default and -1 keep a window that is within the token budget (32x26) unchanged.
+	for _, args := range []map[string]any{{"vm": "CAD", "handle": 10}, {"vm": "CAD", "handle": 10, "max_size": -1}} {
+		if out, w, h := observe(t, ctx, cs, args); w != 32 || h != 26 || shot(out)["scale"] != 1.0 {
+			t.Errorf("%v: image %dx%d, screenshot %v", args, w, h, shot(out))
+		}
+	}
+	for _, args := range []map[string]any{{"vm": "CAD", "max_size": -2}, {"vm": "CAD", "max_depth": 11}, {"vm": "CAD", "max_nodes": 1001}, {"vm": "CAD", "max_depth": -1}} {
 		e := observeError(t, ctx, cs, args, codeInvalidArgument)
 		if n := e["next"].(string); !strings.Contains(n, "max_") {
 			t.Errorf("%v: next %q does not name the allowed range", args, n)

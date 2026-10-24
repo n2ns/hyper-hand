@@ -127,12 +127,72 @@ func TestTransformScreenshotInvalid(t *testing.T) {
 			t.Fatalf("accepted invalid region %+v", r)
 		}
 	}
-	if _, _, err := transformScreenshot(data, screenshotOptions{MaxSize: -1}); err == nil {
-		t.Fatal("accepted negative max_size")
+	if _, _, err := transformScreenshot(data, screenshotOptions{MaxSize: -2}); err == nil {
+		t.Fatal("accepted max_size -2")
 	}
 	for _, invalid := range [][]byte{nil, {}, []byte("not a PNG"), data[:len(data)/2]} {
 		if _, _, err := transformScreenshot(invalid, screenshotOptions{}); err == nil {
 			t.Fatal("accepted invalid PNG")
+		}
+	}
+}
+
+func TestFitTokenBudget(t *testing.T) {
+	for _, tt := range []struct{ w, h, ow, oh int }{
+		{1920, 1080, 1456, 819}, // 52x30 = 1560 tiles; a longest side of 1457 needs 53x30
+		{2560, 1600, 1389, 868}, // 50x31 = 1550 tiles
+		{1900, 1040, 1484, 812}, // 53x29 = 1537 tiles
+		{1280, 720, 1280, 720},  // 46x26 = 1196 tiles: within the budget, unchanged
+		{800, 600, 800, 600},    // small window, unchanged
+		{1568, 28, 1568, 28},    // exactly at the side limit
+		{400, 1900, 330, 1568},  // narrow tall window: only the longest side limits it
+		{1, 5000, 1, 1568},      // 1xN keeps one pixel on the short axis
+		{5000, 1, 1568, 1},
+		{1, 1, 1, 1},
+	} {
+		ow, oh := fitTokenBudget(tt.w, tt.h)
+		if ow != tt.ow || oh != tt.oh {
+			t.Errorf("%dx%d: got %dx%d, want %dx%d", tt.w, tt.h, ow, oh, tt.ow, tt.oh)
+		}
+		if !withinTokenBudget(ow, oh) {
+			t.Errorf("%dx%d: %dx%d exceeds the budget", tt.w, tt.h, ow, oh)
+		}
+		// Largest such size: one more pixel on the longest side would exceed the budget.
+		if long := max(ow, oh); long < max(tt.w, tt.h) && withinTokenBudget(scaleLongestSide(tt.w, tt.h, long+1)) {
+			t.Errorf("%dx%d: %dx%d is not the largest size within the budget", tt.w, tt.h, ow, oh)
+		}
+	}
+}
+
+func TestTransformScreenshotSizeModes(t *testing.T) {
+	data, _ := screenshotFixture(t, 1920, 1080)
+	for _, tt := range []struct {
+		name    string
+		opts    screenshotOptions
+		ow, oh  int
+		samePNG bool
+	}{
+		{"default budget", screenshotOptions{}, 1456, 819, false},
+		{"original", screenshotOptions{MaxSize: -1}, 1920, 1080, true},
+		{"longest side", screenshotOptions{MaxSize: 1000}, 1000, 563, false},
+		{"longest side above the budget", screenshotOptions{MaxSize: 1600}, 1600, 900, false},
+		{"window within the budget", screenshotOptions{Region: &screenshotRegion{X: 100, Y: 50, Width: 600, Height: 400}}, 600, 400, false},
+		{"window over the budget", screenshotOptions{Region: &screenshotRegion{X: 10, Y: 0, Width: 1900, Height: 1040}}, 1484, 812, false},
+		{"window original", screenshotOptions{Region: &screenshotRegion{X: 10, Y: 0, Width: 1900, Height: 1040}, MaxSize: -1}, 1900, 1040, false},
+	} {
+		got, g, err := transformScreenshot(data, tt.opts)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if g.OutputWidth != tt.ow || g.OutputHeight != tt.oh || g.ScaleX != float64(tt.ow)/float64(g.Width) || g.ScaleY != float64(tt.oh)/float64(g.Height) {
+			t.Errorf("%s: geometry %+v, want %dx%d", tt.name, g, tt.ow, tt.oh)
+		}
+		if same := bytes.Equal(got, data); same != tt.samePNG {
+			t.Errorf("%s: original PNG bytes kept = %v", tt.name, same)
+		}
+		im, err := png.Decode(bytes.NewReader(got))
+		if err != nil || im.Bounds() != image.Rect(0, 0, tt.ow, tt.oh) {
+			t.Errorf("%s: output %v, %v", tt.name, im.Bounds(), err)
 		}
 	}
 }
