@@ -10,11 +10,13 @@ type ListAppsArgs struct {
 }
 
 // AppLaunch can be passed directly to vm_launch, with the VM added by the caller.
-// Shortcut arguments and working directory are preserved.
+// Shortcut arguments and working directory are preserved. A packaged (UWP/MSIX) application has AUMID set and an
+// empty Path and Cwd.
 type AppLaunch struct {
-	Path string   `json:"path"`
-	Args []string `json:"args"`
-	Cwd  string   `json:"cwd"`
+	Path  string   `json:"path"`
+	Args  []string `json:"args"`
+	Cwd   string   `json:"cwd"`
+	AUMID string   `json:"aumid,omitempty"`
 }
 
 type AppWindow struct {

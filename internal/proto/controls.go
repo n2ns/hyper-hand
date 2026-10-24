@@ -68,6 +68,9 @@ type ControlInfo struct {
 	Value        string        `json:"value,omitempty"`
 	HasValue     bool          `json:"has_value,omitempty"`
 	Focused      bool          `json:"focused,omitempty"`
+	// OmittedChildren counts this node's children that the walk left out because of the per-parent child limit
+	// (truncation reason "child_limit"); 0 when every child was visited or other limits stopped the walk.
+	OmittedChildren int `json:"omitted_children,omitempty"`
 }
 
 // ControlState contains readable UIA state. Nil fields mean unavailable, not false.

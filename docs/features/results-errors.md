@@ -43,7 +43,7 @@ Every refusal and failure is returned as an MCP result with `isError: true` whos
 | `unsupported_pattern` | The control does not support the requested pattern action; `supported` lists the patterns it does support |
 | `partial_input` | `vm_type` or `vm_key` stopped after some input was injected; `applied_chars` / `total_chars` or `applied` / `total` say how much. A failure before anything was injected keeps the underlying code (`failed` with `applied_chars: 0`, or the refusal of the first combination) |
 | `agent_required` | The operation needs the guest agent, which did not answer or is not installed |
-| `agent_outdated` | The agent's protocol is older than the host's (`protocol` 2): every new agent connection is pinged first and every op except `ping` and `update_agent` is then refused (see 8.6); also an agent that answered `unknown op`. `next` is `call vm_update_agent` |
+| `agent_outdated` | The agent's protocol is older than the host's (`protocol` 6): every new agent connection is pinged first and every op except `ping` and `update_agent` is then refused (see 8.6); also an agent that answered `unknown op`. `next` is `call vm_update_agent` |
 | `ambiguous_target` | `pid` alone selects a process with several visible windows; `handles` lists them. A checkpoint `name` that several checkpoints have; `ids` lists them (see 3.3) |
 | `no_window` | No visible window has the given `handle` or `pid`, no window is in the foreground when one is needed, or `vm_launch` saw no window in time |
 | `elevation_timeout` | `vm_exec` with `admin`: `timeout_ms` passed before elevation completed (an unanswered UAC prompt, or a timeout too short to elevate), so the command did not run; field `timeout_ms` (see 5.5) |

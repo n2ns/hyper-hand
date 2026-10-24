@@ -21,7 +21,7 @@ var Version = "dev"
 
 // Protocol is the wire protocol generation. The host refuses an agent whose ping reports a lower Protocol with the
 // error code agent_outdated; there is no compatibility path for older agents.
-const Protocol = 5
+const Protocol = 6
 
 const (
 	OpPing         = "ping"          // -> PingResult
@@ -172,12 +172,14 @@ type FocusedControl struct {
 }
 
 // LaunchArgs starts Path with Args in Cwd as a detached process: not in a job object, so it outlives the request.
-// Admin starts it elevated through the admin worker.
+// Admin starts it elevated through the admin worker. AUMID instead activates a packaged (UWP/MSIX) application by its
+// Application User Model ID, with Args joined as its activation arguments; Path, Cwd and Admin must then be empty.
 type LaunchArgs struct {
-	Path  string   `json:"path"`
+	Path  string   `json:"path,omitempty"`
 	Args  []string `json:"args,omitempty"`
 	Cwd   string   `json:"cwd,omitempty"`
 	Admin bool     `json:"admin,omitempty"`
+	AUMID string   `json:"aumid,omitempty"`
 }
 
 type LaunchResult struct {
