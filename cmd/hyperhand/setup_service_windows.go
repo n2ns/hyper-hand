@@ -14,8 +14,21 @@ import (
 	"hyperhand/internal/broker"
 )
 
+// serviceRecoveryResetSeconds is how long the service must run without failing before the service control manager
+// resets its failure count to zero.
+const serviceRecoveryResetSeconds = 24 * 60 * 60
+
+// serviceRecoveryActions restarts the service after its first, second and third (and every later) failure.
+func serviceRecoveryActions() []mgr.RecoveryAction {
+	return []mgr.RecoveryAction{
+		{Type: mgr.ServiceRestart, Delay: 5 * time.Second},
+		{Type: mgr.ServiceRestart, Delay: 30 * time.Second},
+		{Type: mgr.ServiceRestart, Delay: 60 * time.Second},
+	}
+}
+
 // installService creates or updates the broker service: automatic start, the virtual account, an unrestricted
-// service SID, and a DACL that lets the owner only query and start it.
+// service SID, restart on failure, and a DACL that lets the owner only query and start it.
 func installService(m *mgr.Mgr, hostExe, ownerSID string, exists bool) error {
 	c := mgr.Config{
 		ServiceType:      windows.SERVICE_WIN32_OWN_PROCESS,
@@ -43,6 +56,9 @@ func installService(m *mgr.Mgr, hostExe, ownerSID string, exists bool) error {
 		return err
 	}
 	defer s.Close()
+	if err := s.SetRecoveryActions(serviceRecoveryActions(), serviceRecoveryResetSeconds); err != nil {
+		return fmt.Errorf("set service recovery actions: %w", err)
+	}
 	// 0x20015: READ_CONTROL, SERVICE_QUERY_CONFIG, SERVICE_QUERY_STATUS and SERVICE_START.
 	sd, err := windows.SecurityDescriptorFromString("D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x20015;;;" + ownerSID + ")")
 	if err != nil {

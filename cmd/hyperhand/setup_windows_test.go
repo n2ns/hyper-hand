@@ -253,6 +253,27 @@ func TestServiceInspectionReadOnly(t *testing.T) {
 	}
 }
 
+// The service restarts 5, 30 and 60 seconds after its first, second and third failure; the count resets after a day.
+func TestServiceRecoveryActions(t *testing.T) {
+	want := []mgr.RecoveryAction{
+		{Type: mgr.ServiceRestart, Delay: 5 * time.Second},
+		{Type: mgr.ServiceRestart, Delay: 30 * time.Second},
+		{Type: mgr.ServiceRestart, Delay: 60 * time.Second},
+	}
+	got := serviceRecoveryActions()
+	if len(got) != len(want) {
+		t.Fatalf("recovery actions: %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("recovery action %d: %+v, want %+v", i+1, got[i], want[i])
+		}
+	}
+	if serviceRecoveryResetSeconds != 86400 {
+		t.Errorf("reset period: %d", serviceRecoveryResetSeconds)
+	}
+}
+
 // stopProcesses ends only processes started from the given executable, never this one, and waits for them.
 func TestStopProcessesByPath(t *testing.T) {
 	if os.Getenv("HYPERHAND_TEST_SLEEP") == "1" {
