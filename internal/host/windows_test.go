@@ -192,4 +192,15 @@ func TestResolveWindowHostedPID(t *testing.T) {
 	if _, err := resolveWindow(ws, windowSelector{Handle: 3, PID: 6100}); err == nil {
 		t.Error("hosted pid selected another window")
 	}
+	// A minimized UWP app: its frame hosts nothing, so handle and the app's pid still select the frame by handle.
+	ws[0].HostedPID = 0
+	if w, err := resolveWindow(ws, windowSelector{Handle: 2, PID: 6100}); err != nil || w.Handle != 2 {
+		t.Errorf("idle frame by handle: %+v %v", w, err)
+	}
+	if _, err := resolveWindow(ws, windowSelector{PID: 6100}); err == nil {
+		t.Error("pid alone selected an idle frame")
+	}
+	if c := windowCandidates([]proto.WindowInfo{{Handle: 2, PID: 900, HostedPID: 6100}, {Handle: 3, PID: 7000}}, 6100); len(c) != 1 || c[0].Handle != 2 {
+		t.Errorf("candidates of a hosted pid: %+v", c)
+	}
 }

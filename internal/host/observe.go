@@ -49,7 +49,7 @@ type windowSummary struct {
 func windowCandidates(ws []proto.WindowInfo, pid uint32) []windowSummary {
 	out := []windowSummary{}
 	for _, w := range ws {
-		if pid == 0 || w.PID == pid {
+		if pid == 0 || w.PID == pid || w.HostedPID == pid {
 			out = append(out, windowSummary{Handle: w.Handle, PID: w.PID, Process: w.Process, Title: w.Title, Class: w.Class})
 		}
 	}

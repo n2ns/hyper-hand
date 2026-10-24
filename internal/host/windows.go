@@ -103,7 +103,10 @@ func resolveWindow(ws []proto.WindowInfo, s windowSelector) (proto.WindowInfo, e
 	var found []proto.WindowInfo
 	for _, w := range ws {
 		// A packaged app's frame window belongs to ApplicationFrameHost; the app's own PID (vm_launch's pid) selects it too.
-		if s.PID != 0 && w.PID != s.PID && w.HostedPID != s.PID {
+		// A frame that hosts no app at the moment (minimized or suspended: no hosted_pid) is selected by its handle
+		// whatever pid accompanies it, since the hosted app cannot be checked.
+		frameByHandle := s.Handle != 0 && w.Handle == s.Handle && w.Class == "ApplicationFrameWindow" && w.HostedPID == 0
+		if s.PID != 0 && w.PID != s.PID && w.HostedPID != s.PID && !frameByHandle {
 			continue
 		}
 		if s.Handle != 0 && w.Handle != s.Handle {
