@@ -183,3 +183,115 @@ func TestAppsDiscoverySmoke(t *testing.T) {
 	}
 	t.Logf("discovered %d matching apps; returned %d; warnings %d", r.Total, len(r.Apps), len(r.Warnings))
 }
+
+func TestPackagedAUMID(t *testing.T) {
+	for id, want := range map[string]bool{
+		"Microsoft.WindowsCalculator_8wekyb3d8bbwe!App":                                       true,
+		"windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel": true,
+		"Microsoft.Windows.Explorer":                                                          false,
+		`{6D809377-6AF0-444B-8957-A3773F02200E}\app!x.exe`:                                    false,
+		`C:\Tools\a!b.exe`:     false,
+		"!App":                 false,
+		"Family_hash!":         false,
+		"Family_hash!App!More": false,
+		"Family hash!App":      false,
+		"":                     false,
+	} {
+		if got := packagedAUMID(id); got != want {
+			t.Errorf("packagedAUMID(%q) = %v, want %v", id, got, want)
+		}
+	}
+}
+
+// Packaged apps merge with desktop programs under the same sorting, query, deduplication and limit rules.
+func TestAppsCombinePackaged(t *testing.T) {
+	win32 := appSourceResult{Completed: 1, Apps: []appCandidate{{Name: "Editor", Path: `C:\Apps\edit.exe`}}}
+	packaged := appSourceResult{Completed: 1, Apps: []appCandidate{
+		{Name: "计算器", AUMID: "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"},
+		{Name: "Calculator duplicate", AUMID: "microsoft.windowscalculator_8WEKYB3D8BBWE!app"},
+		{Name: "Alarms", AUMID: "Microsoft.WindowsAlarms_8wekyb3d8bbwe!App"},
+		{Name: "Not packaged", AUMID: "Microsoft.Windows.Explorer"},
+	}}
+	r, err := combineApps(proto.ListAppsArgs{Limit: 50}, win32, packaged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, a := range r.Apps {
+		names = append(names, a.Name)
+	}
+	if r.Total != 3 || r.Truncated || !reflect.DeepEqual(names, []string{"Alarms", "Calculator duplicate", "Editor"}) {
+		t.Fatalf("merged result: %+v", r)
+	}
+	calc := r.Apps[1]
+	if calc.Launch.AUMID != "microsoft.windowscalculator_8WEKYB3D8BBWE!app" || calc.Launch.Path != "" || calc.Launch.Cwd != "" || calc.Launch.Args == nil || len(calc.Launch.Args) != 0 || calc.Windows == nil {
+		t.Fatalf("packaged launch: %+v", calc)
+	}
+	if r.Apps[2].Launch.AUMID != "" || r.Apps[2].Launch.Path != `C:\Apps\edit.exe` {
+		t.Fatalf("desktop launch changed: %+v", r.Apps[2])
+	}
+	// The same AUMID in any case has one stable ID; the display name and the AUMID are both searched.
+	byName, err := combineApps(proto.ListAppsArgs{Query: "计算", Limit: 50}, packaged)
+	if err != nil || byName.Total != 1 || byName.Apps[0].ID != calc.ID || byName.Apps[0].Name != "计算器" {
+		t.Fatalf("display-name query: %+v, %v", byName, err)
+	}
+	byID, err := combineApps(proto.ListAppsArgs{Query: "WINDOWSALARMS_8", Limit: 50}, win32, packaged)
+	if err != nil || byID.Total != 1 || byID.Apps[0].Name != "Alarms" {
+		t.Fatalf("AUMID query: %+v, %v", byID, err)
+	}
+	limited, err := combineApps(proto.ListAppsArgs{Limit: 1}, packaged, win32)
+	if err != nil || limited.Total != 3 || !limited.Truncated || len(limited.Apps) != 1 || limited.Apps[0].Name != "Alarms" {
+		t.Fatalf("limit: %+v, %v", limited, err)
+	}
+	// A failed packaged source keeps the desktop results and reports a warning.
+	failed := appSourceResult{Warnings: []string{"Get-StartApps: not available"}}
+	partial, err := combineApps(proto.ListAppsArgs{Limit: 50}, win32, failed)
+	if err != nil || partial.Total != 1 || !reflect.DeepEqual(partial.Warnings, failed.Warnings) {
+		t.Fatalf("partial: %+v, %v", partial, err)
+	}
+}
+
+// Reads the current user's packaged apps through Get-StartApps; nothing is launched.
+func TestPackagedAppsDiscovery(t *testing.T) {
+	source := packagedApps(context.Background())
+	if source.Completed == 0 {
+		t.Skipf("Get-StartApps is not available on this Windows edition: %v", source.Warnings)
+	}
+	r, err := combineApps(proto.ListAppsArgs{Limit: 200}, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range r.Apps {
+		if !packagedAUMID(a.Launch.AUMID) || a.Launch.Path != "" || a.Name == "" {
+			t.Errorf("packaged entry %+v", a)
+		}
+	}
+	if err := attachAppProcesses(context.Background(), r.Apps); err != nil {
+		t.Log("process inspection warning:", err)
+	}
+	t.Logf("%d packaged apps, warnings %v", r.Total, source.Warnings)
+}
+
+// Only ApplicationFrameHost frames have a hosted PID, and it is never the frame's own process.
+func TestHostedPID(t *testing.T) {
+	for _, h := range topWindows() {
+		var pid uint32
+		windows.GetWindowThreadProcessId(h, &pid)
+		class := className(h)
+		got := hostedPID(h, class, pid)
+		if class != "ApplicationFrameWindow" && got != 0 {
+			t.Errorf("window %x of class %q has hosted PID %d", h, class, got)
+		}
+		if got != 0 && got == pid {
+			t.Errorf("frame %x hosts its own PID", h)
+		}
+		if got != 0 {
+			aumid := ""
+			if p, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, got); err == nil {
+				aumid = processAUMID(p)
+				windows.CloseHandle(p)
+			}
+			t.Logf("frame %x %q hosts PID %d (%s)", h, windowText(h), got, aumid)
+		}
+	}
+}

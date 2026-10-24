@@ -144,6 +144,8 @@ type Rect struct {
 // owner is disabled, as it is while a modal dialog runs. GroupRoot is the handle reached by following Owner links
 // through listed windows of the same process (at most 8 links): the window itself when it has no such owner.
 // Integrity is the process token's integrity level: "low", "medium", "high", "system", or "" when it cannot be read.
+// HostedPID is set on an ApplicationFrameHost frame (class ApplicationFrameWindow) of a UWP app: the PID of the app
+// process whose CoreWindow is a child of the frame; 0 otherwise.
 type WindowInfo struct {
 	Handle     uint64 `json:"handle"`
 	Title      string `json:"title"`
@@ -158,6 +160,7 @@ type WindowInfo struct {
 	Modal      bool   `json:"modal"`
 	GroupRoot  uint64 `json:"group_root"`
 	Integrity  string `json:"integrity,omitempty"`
+	HostedPID  uint32 `json:"hosted_pid,omitempty"`
 }
 
 // FocusedControl summarizes the UI Automation element with keyboard focus (IUIAutomation::GetFocusedElement). Window

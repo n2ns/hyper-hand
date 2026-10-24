@@ -11,11 +11,12 @@ import (
 
 type launchIn struct {
 	VM           string   `json:"vm,omitempty" jsonschema:"VM name from vm_list (required)"`
-	Path         string   `json:"path" jsonschema:"program path in the guest"`
-	Args         []string `json:"args,omitempty" jsonschema:"command-line arguments"`
+	Path         string   `json:"path,omitempty" jsonschema:"program path in the guest; required unless aumid is given"`
+	Args         []string `json:"args,omitempty" jsonschema:"command-line arguments; with aumid, joined by single spaces (no quoting) as the activation arguments"`
 	Cwd          string   `json:"cwd,omitempty" jsonschema:"working directory in the guest"`
 	WaitWindowMs int      `json:"wait_window_ms,omitempty" jsonschema:"how long to wait for the process's first visible window; default 60000"`
 	Admin        bool     `json:"admin,omitempty" jsonschema:"start elevated (administrator)"`
+	AUMID        string   `json:"aumid,omitempty" jsonschema:"Application User Model ID of a packaged (UWP/MSIX) app, from vm_apps launch.aumid; instead of path, cwd and admin"`
 }
 
 // launchOut is vm_launch's result: the process and its first visible top-level window.
@@ -32,9 +33,14 @@ var launchPollInterval = 300 * time.Millisecond
 
 // registerLaunch registers vm_launch.
 func registerLaunch(d *deps) {
-	addToolIn(d, toolSpec{name: "vm_launch", desc: "Start a program in the guest as a detached process (it outlives the call) and wait until it shows a visible top-level window; returns the pid and the window's handle, title and class to pass to vm_observe and the actions. A splash screen or dialog of the process counts as its window. On no_window the process keeps running."}, func(ctx context.Context, in launchIn) (*mcp.CallToolResult, error) {
-		if in.Path == "" {
-			return nil, refuse(codeInvalidArgument, "pass path", nil, "path is required")
+	addToolIn(d, toolSpec{name: "vm_launch", desc: "Start a program in the guest as a detached process (it outlives the call) and wait until it shows a visible top-level window; returns the pid and the window's handle, title and class to pass to vm_observe and the actions. A splash screen or dialog of the process counts as its window. On no_window the process keeps running. " +
+		"For a packaged (UWP/MSIX) app pass aumid from vm_apps instead of path (no cwd or admin); it is activated and pid is the app's process. A UWP app's window is its ApplicationFrameHost.exe frame, whose own pid differs: pass only the handle to vm_observe."}, func(ctx context.Context, in launchIn) (*mcp.CallToolResult, error) {
+		if in.AUMID != "" && (in.Path != "" || in.Cwd != "" || in.Admin) {
+			return nil, refuse(codeInvalidArgument, "pass aumid alone (with optional args) for a packaged app, or path with optional args, cwd and admin for a program", nil,
+				"aumid cannot be combined with path, cwd or admin")
+		}
+		if in.AUMID == "" && in.Path == "" {
+			return nil, refuse(codeInvalidArgument, "pass path, or aumid for a packaged app; vm_apps returns either in launch", nil, "path or aumid is required")
 		}
 		timeout := time.Duration(in.WaitWindowMs) * time.Millisecond
 		if in.WaitWindowMs <= 0 {
@@ -46,7 +52,7 @@ func registerLaunch(d *deps) {
 		}
 		start := time.Now()
 		var l proto.LaunchResult
-		if _, err := c.Call(ctx, proto.OpLaunch, proto.LaunchArgs{Path: in.Path, Args: in.Args, Cwd: in.Cwd, Admin: in.Admin}, nil, &l); err != nil {
+		if _, err := c.Call(ctx, proto.OpLaunch, proto.LaunchArgs{Path: in.Path, Args: in.Args, Cwd: in.Cwd, Admin: in.Admin, AUMID: in.AUMID}, nil, &l); err != nil {
 			return nil, agentErr(err)
 		}
 		w, found, err := waitWindow(ctx, c, l.PID, timeout)
@@ -61,7 +67,8 @@ func registerLaunch(d *deps) {
 	})
 }
 
-// waitWindow lists the guest's windows every launchPollInterval until a visible top-level window of pid appears
+// waitWindow lists the guest's windows every launchPollInterval until a visible top-level window of pid (see
+// windowOfPID) appears
 // (one with a title is preferred over the first) or timeout passes; found is false on timeout.
 func waitWindow(ctx context.Context, c *Client, pid uint32, timeout time.Duration) (w proto.WindowInfo, found bool, err error) {
 	end := time.Now().Add(timeout)
@@ -86,11 +93,12 @@ func waitWindow(ctx context.Context, c *Client, pid uint32, timeout time.Duratio
 	}
 }
 
-// windowOfPID picks pid's window from ws: the first with a title, else the first.
+// windowOfPID picks pid's window from ws: the first with a title, else the first. A UWP app's window is the
+// ApplicationFrameHost frame whose HostedPID is pid.
 func windowOfPID(ws []proto.WindowInfo, pid uint32) (proto.WindowInfo, bool) {
 	var first *proto.WindowInfo
 	for i := range ws {
-		if ws[i].PID != pid {
+		if ws[i].PID != pid && ws[i].HostedPID != pid {
 			continue
 		}
 		if ws[i].Title != "" {

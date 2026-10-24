@@ -24,7 +24,30 @@ var (
 	pWindowFromPoint           = user32.NewProc("WindowFromPoint")
 	pGetAncestor               = user32.NewProc("GetAncestor")
 	pGetSystemMetrics          = user32.NewProc("GetSystemMetrics")
+	pFindWindowExW             = user32.NewProc("FindWindowExW")
 )
+
+// hostedPID returns, for an ApplicationFrameHost frame of a UWP app (class ApplicationFrameWindow), the PID of the
+// app process that owns the frame's child CoreWindow; 0 for other windows, or while the frame hosts no CoreWindow of
+// another process (a minimized or suspended app's CoreWindow is detached from its frame).
+func hostedPID(h windows.HWND, class string, pid uint32) uint32 {
+	if class != "ApplicationFrameWindow" {
+		return 0
+	}
+	core := windows.StringToUTF16Ptr("Windows.UI.Core.CoreWindow")
+	var child uintptr
+	for {
+		child, _, _ = pFindWindowExW.Call(uintptr(h), child, uintptr(unsafe.Pointer(core)), 0)
+		if child == 0 {
+			return 0
+		}
+		var p uint32
+		windows.GetWindowThreadProcessId(windows.HWND(child), &p)
+		if p != 0 && p != pid {
+			return p
+		}
+	}
+}
 
 const (
 	gwOwner                  = 4
@@ -151,6 +174,7 @@ func listWindows(ctx context.Context, args json.RawMessage, _ []byte) (any, []by
 			levels[w.PID] = level
 		}
 		w.Integrity = level
+		w.HostedPID = hostedPID(h, w.Class, w.PID)
 		r.Windows = append(r.Windows, w)
 	}
 	groupRoots(r.Windows)
