@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -202,5 +203,25 @@ func TestResolveWindowHostedPID(t *testing.T) {
 	}
 	if c := windowCandidates([]proto.WindowInfo{{Handle: 2, PID: 900, HostedPID: 6100}, {Handle: 3, PID: 7000}}, 6100); len(c) != 1 || c[0].Handle != 2 {
 		t.Errorf("candidates of a hosted pid: %+v", c)
+	}
+}
+
+func TestCheckUsableDisabledOwnerInFront(t *testing.T) {
+	// AutoCAD after a flyout closed: the disabled main window holds the foreground, its modal dialog (owned by it,
+	// enabled) does not, and the command line (owned by it, untitled) is enabled too.
+	ws := []proto.WindowInfo{
+		{Handle: 5, PID: 100, Process: "acad.exe", Class: "HwndWrapper[acad]", Title: "", Owner: 1, Enabled: true},
+		{Handle: 7, PID: 100, Process: "acad.exe", Class: "#32770", Title: "Customer Involvement Program", Owner: 1, Enabled: true},
+		{Handle: 1, PID: 100, Process: "acad.exe", Class: "AfxMDIFrame110u", Title: "AutoCAD", Enabled: false, Foreground: true},
+	}
+	err := checkUsable(ws, ws[2])
+	if code(err) != codeTargetDisabled || field(err, "act_on") != uint64(7) || asToolError(err).Next != "act on handle 7 first" {
+		t.Errorf("own dialog behind its disabled owner: %v %v", err, asToolError(err).Fields)
+	}
+	// Without such a window the reason does not claim that none exists.
+	ws = ws[1:2:2]
+	ws[0].Foreground, ws[0].Enabled, ws[0].Owner = true, false, 0
+	if err := checkUsable(ws, ws[0]); code(err) != codeTargetDisabled || strings.Contains(err.Error(), "none of its own windows is a modal dialog") {
+		t.Errorf("no own dialog: %v", err)
 	}
 }

@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `target_disabled` when the disabled target itself held the foreground (its modal dialog behind it, as after a shell flyout closed) said that none of its own windows was a modal dialog and offered no window to act on. It now names the target's own dialog in `act_on`; without one the reason no longer claims that none exists.
 - Recover an existing disconnected VMConnect viewer after `vm_start`, a running `vm_restore`, or `vm_take_console` returning `moved`. The console task verifies the local VM and viewer before replacing a recognized disconnected viewer in basic mode, without changing saved enhanced-session settings. It recognizes both VMConnect video surface types and raises the replacement window using verified foreground activation with a bounded helper. Connection and foreground state are reported separately. Recovery is asynchronous and does not change the VM operation's result.
 
 ## [0.4.0] - 2026-10-16

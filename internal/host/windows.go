@@ -130,6 +130,28 @@ func resolveWindow(ws []proto.WindowInfo, s windowSelector) (proto.WindowInfo, e
 	return proto.WindowInfo{}, refuse(codeAmbiguousTarget, fmt.Sprintf("pass handle, one of %v", handles), map[string]any{"handles": handles}, "process %d has %d visible windows", s.PID, len(found))
 }
 
+// ownDialog returns the topmost enabled window of w's own windows (inGroup, other than w) that looks like a dialog:
+// class #32770 first, else one with a title. Untitled popups such as AutoCAD's command line stay enabled while a
+// modal dialog disables their owner, so they are not taken for the dialog.
+func ownDialog(ws []proto.WindowInfo, w proto.WindowInfo) (proto.WindowInfo, bool) {
+	var titled *proto.WindowInfo
+	for i, c := range ws { // ws is in Z order, topmost first
+		if c.Handle == w.Handle || !c.Enabled || c.Minimized || !inGroup(ws, w, c.Handle) {
+			continue
+		}
+		if c.Class == "#32770" {
+			return c, true
+		}
+		if titled == nil && c.Title != "" {
+			titled = &ws[i]
+		}
+	}
+	if titled != nil {
+		return *titled, true
+	}
+	return proto.WindowInfo{}, false
+}
+
 func pidClause(pid uint32) string {
 	if pid == 0 {
 		return ""
@@ -155,7 +177,15 @@ func checkUsable(ws []proto.WindowInfo, w proto.WindowInfo) error {
 		if ok && !inFront {
 			return actOn("window %s is disabled while %s, which is not one of its own windows, is in the foreground and probably blocks it", describe(w), describe(fg))
 		}
-		return refuse(codeTargetDisabled, "call vm_observe (whole screen, controls: true) to find what blocks it", nil, "window %s is disabled and none of its own windows is a modal dialog", describe(w))
+		// w itself (or nothing) holds the foreground: its modal dialog can be behind it, as after a shell flyout closed.
+		if d, found := ownDialog(ws, w); found {
+			var front *windowRef
+			if ok {
+				front = refOf(fg)
+			}
+			return refuse(codeTargetDisabled, fmt.Sprintf("act on handle %d first", d.Handle), map[string]any{"act_on": d.Handle, "foreground": front}, "window %s is disabled and its own window %s, probably a modal dialog, is not in the foreground", describe(w), describe(d))
+		}
+		return refuse(codeTargetDisabled, "call vm_observe (whole screen, controls: true) to find what blocks it", nil, "window %s is disabled and no window of its own looks like a dialog that disables it", describe(w))
 	}
 	if !ok {
 		return refuse(codeActivateFailed, "call again with activate: true", map[string]any{"foreground": nil}, "window %s is not in the foreground and no window is", describe(w))
