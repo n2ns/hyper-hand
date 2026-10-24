@@ -14,8 +14,8 @@ repository root:
         run.cleanup()
         run.save()
 
-The checkpoint's ID is kept in the evidence directory, so a runner restarted after a crash (or a separate
-cleanup-only call) still restores it.
+The checkpoint's ID is kept in the evidence directory per VM, so a runner restarted after a crash (or a separate
+cleanup-only call) still restores it; on a later day pass the run's date: Run("Win10", "child-limit", day="20261024").
 
 Standard library only, like client/hyperhand_client.py.
 """
@@ -27,7 +27,7 @@ import sys
 import time
 
 sys.path.insert(0, "client")
-from hyperhand_client import HyperHand, HyperHandError, new_task_id  # noqa: E402
+from hyperhand_client import HyperHand, HyperHandError, TransportError, new_task_id  # noqa: E402
 
 
 def png_size(path):
@@ -42,9 +42,10 @@ def png_size(path):
 class Run:
     """One acceptance run: evidence directory build/<item>-<yyyymmdd>/, one task (task file there) and the results."""
 
-    def __init__(self, vm, item, timeout=300):
+    def __init__(self, vm, item, timeout=300, day=None):
+        """day (yyyymmdd) selects an earlier run's evidence directory; the default is today's."""
         self.vm = vm
-        self.dir = os.path.join("build", f"{item}-{datetime.date.today():%Y%m%d}")
+        self.dir = os.path.join("build", f"{item}-{day or f'{datetime.date.today():%Y%m%d}'}")
         os.makedirs(self.dir, exist_ok=True)
         task_file = os.path.join(self.dir, "task")
         if not os.path.exists(task_file):
@@ -54,7 +55,8 @@ class Run:
             self.task_id = f.read().strip()
         self.hh = HyperHand(vm=vm, task_id=self.task_id, out_dir=self.dir, timeout=timeout)
         self.results = {}
-        self.state_file = os.path.join(self.dir, "checkpoint.json")
+        # Per VM: one run can check several VMs with the same task.
+        self.state_file = os.path.join(self.dir, "checkpoint-" + "".join(c if c.isalnum() or c in "-_." else "_" for c in vm) + ".json")
         self.checkpoint_id = None
         self.checkpoints_before = None
         if os.path.exists(self.state_file):  # a previous process of this run took the checkpoint
@@ -104,13 +106,16 @@ class Run:
             if self.checkpoint_id in left:
                 end = self.call("vm_end_turn", vm=self.vm, all_temp=True)
                 left = [c["id"] for c in self.call("vm_checkpoints")["checkpoints"]]
-            added = sorted(set(left) - set(self.checkpoints_before or []))
+            # Without a checkpoint of this run there is no "before" listing to compare with.
+            added = sorted(set(left) - set(self.checkpoints_before)) if self.checkpoints_before is not None else []
             # The write check uses the MCP session's default task ("" task ID), which ends when the session closes,
             # so it does not keep the VM's write ownership.
             with HyperHand(vm=self.vm, task_id="") as probe:
                 host = probe.call("vm_exec", command="hostname")
         except HyperHandError as e:
             return self.check("cleanup", False, {"error": e.obj})
+        except TransportError as e:  # the host service restarted or a call timed out: keep the evidence (save) going
+            return self.check("cleanup", False, {"transport_error": str(e)})
         ok = self.check("cleanup", not added and not end["errors"] and not end["skipped"] and host["exit_code"] == 0,
                         {"end_turn": end, "checkpoints_added_and_left": added})
         if ok and os.path.exists(self.state_file):
