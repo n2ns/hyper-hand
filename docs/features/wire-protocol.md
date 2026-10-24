@@ -41,7 +41,7 @@ uint32 header length | uint64 payload length | header JSON | payload bytes
 | `hscroll` | `{x, y, delta}` | none; horizontal wheel notches at a screen point through `SendInput` |
 | `clipboard_get` | none | `{text}` |
 | `clipboard_set` | `{text}` | none |
-| `focus_window` | `{title, handle}` | `{text, handle}`, the focused window's title and handle; the host passes a handle (used by the actions' activation step) |
+| `focus_window` | `{title, handle}` | `{text, handle, dismissed?}`, the focused window's title and handle, and the shell flyout (`<process> (class <class>)`) closed with Esc first, when one was; the host passes a handle (used by the actions' activation step) |
 | `window_at` | `{x, y}` | `{handle, class, pid, process}`, the top-level window a click at that screen point reaches; handle 0 off screen |
 | `list_windows` | `{focused}` (optional) | `{windows: [{handle, title, class, pid, process, rect, enabled, foreground, minimized, owner, modal, group_root, integrity}], foreground, focused, session, agent_integrity}`; `focused` is the UIA focused control (see 4.2), read through a helper process only when the args ask for it (`vm_windows`, `vm_find_controls`, `vm_observe`), `session` the `session_state` result, `agent_integrity` the agent's own integrity level |
 | `wait` | `{kind, name, path, timeout_ms}` | `{satisfied}` |

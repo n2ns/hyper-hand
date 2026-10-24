@@ -302,6 +302,34 @@ func TestWindowAt(t *testing.T) {
 	}
 }
 
+// Only shell flyouts get the Esc that focus_window presses before activating; names and classes ignore case.
+func TestShellOverlay(t *testing.T) {
+	for _, c := range []struct {
+		process, class string
+		want           bool
+	}{
+		{"StartMenuExperienceHost.exe", "Windows.UI.Core.CoreWindow", true},
+		{"searchhost.exe", "", true},
+		{"SEARCHAPP.EXE", "", true},
+		{"SearchUI.exe", "", true},
+		{"ShellExperienceHost.exe", "", true},
+		{"TextInputHost.exe", "", true},
+		{"explorer.exe", "Shell_LightDismissOverlay", true},
+		{"explorer.exe", "shell_lightdismissoverlay", true},
+		{"explorer.exe", "CabinetWClass", false},
+		{"explorer.exe", "Progman", false},
+		{"explorer.exe", "Shell_TrayWnd", false},
+		{"acad.exe", "Afx:0000000140000000:8", false},
+		{"notepad.exe", "Notepad", false},
+		{"StartMenuExperienceHost", "", false}, // the image name includes .exe
+		{"", "", false},
+	} {
+		if got := shellOverlay(c.process, c.class); got != c.want {
+			t.Errorf("shellOverlay(%q, %q) = %v, want %v", c.process, c.class, got, c.want)
+		}
+	}
+}
+
 func TestMouseInputSize(t *testing.T) {
 	if n := unsafe.Sizeof(mouseInput{}); n != 40 { // sizeof(INPUT) on 64-bit Windows; SendInput rejects other sizes
 		t.Fatalf("mouseInput is %d bytes", n)

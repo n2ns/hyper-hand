@@ -124,10 +124,12 @@ type TitleArgs struct {
 	Handle uint64 `json:"handle,omitempty"`
 }
 
-// FocusResult: Text is the focused window's title (an older host reads only it).
+// FocusResult: Text is the focused window's title (an older host reads only it). Dismissed describes the shell flyout
+// (Start, search, ...) that the agent closed with one Esc before activating, when it did.
 type FocusResult struct {
-	Text   string `json:"text"`
-	Handle uint64 `json:"handle"`
+	Text      string `json:"text"`
+	Handle    uint64 `json:"handle"`
+	Dismissed string `json:"dismissed,omitempty"`
 }
 
 // Rect is a window's visible frame in guest screen pixels (the coordinates of host screenshots and untargeted vm_click).
