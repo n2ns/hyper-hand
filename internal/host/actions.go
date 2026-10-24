@@ -106,6 +106,15 @@ func (d *deps) run(ctx context.Context, vm string, after afterIn, defaultAfter s
 		return body(a)
 	}()
 	if err != nil {
+		if a.dismissed != "" {
+			// A later check refused the action, but the Esc that closed the flyout was already sent.
+			te := asToolError(err)
+			if te.Fields == nil {
+				te.Fields = map[string]any{}
+			}
+			te.Fields["dismissed"] = a.dismissed
+			return nil, te
+		}
 		return nil, err
 	}
 	obj := out.fields

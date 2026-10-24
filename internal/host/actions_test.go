@@ -321,9 +321,37 @@ func TestClickAutoActivation(t *testing.T) {
 			t.Errorf("dismissed in activate_failed: %v", m)
 		}
 	}
+	// A later refusal after the flyout was closed still reports it: the target is disabled once activated.
+	f = backgroundAgent(true)
+	focus := f.fn[proto.OpFocusWindow]
+	f.fn[proto.OpFocusWindow] = func(args any) (any, error) {
+		r, err := focus(args)
+		fr := r.(proto.FocusResult)
+		fr.Dismissed = "SearchApp.exe (class Windows.UI.Core.CoreWindow)"
+		return fr, err
+	}
+	list := f.fn[proto.OpListWindows]
+	calls := 0
+	f.fn[proto.OpListWindows] = func(args any) (any, error) {
+		r, err := list(args)
+		wr := r.(proto.WindowsResult)
+		if calls++; calls > 1 {
+			for i := range wr.Windows {
+				if wr.Windows[i].Handle == 10 {
+					wr.Windows[i].Enabled = false
+				}
+			}
+		}
+		return wr, err
+	}
+	td = newTestDeps(t, f)
+	id = td.put(options(), 1, nil)
+	if r, m := td.call(t, "vm_click", map[string]any{"observation_id": id, "x": 1, "y": 1}); !r.IsError || m["error"] != codeTargetDisabled || m["dismissed"] != "SearchApp.exe (class Windows.UI.Core.CoreWindow)" {
+		t.Errorf("dismissed on a later refusal: %v", m)
+	}
 	// A shell flyout that keeps the foreground is closed with raw Esc.
 	f = backgroundAgent(false)
-	list := f.fn[proto.OpListWindows]
+	list = f.fn[proto.OpListWindows]
 	f.fn[proto.OpListWindows] = func(args any) (any, error) {
 		r, err := list(args)
 		wr := r.(proto.WindowsResult)
