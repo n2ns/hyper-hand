@@ -119,7 +119,8 @@ func startService(m *mgr.Mgr) error {
 		return err
 	}
 	defer s.Close()
-	if err := s.Start(); err != nil {
+	// A recovery restart the service control manager scheduled after a failure can start the service first.
+	if err := s.Start(); err != nil && !errors.Is(err, windows.ERROR_SERVICE_ALREADY_RUNNING) {
 		return err
 	}
 	return waitServiceState(s, svc.Running, 60*time.Second)

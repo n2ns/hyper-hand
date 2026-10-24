@@ -235,6 +235,10 @@ func dismissShellOverlay(target windows.HWND) string {
 	}
 	const vkEscape = 0x1B
 	esc := []inputEvent{{Type: 1, Key: keyboardInput{VK: vkEscape}}, {Type: 1, Key: keyboardInput{VK: vkEscape, Flags: keyUp}}}
+	// The flyout may have closed while its process was looked up; the key must not reach the window that followed it.
+	if windows.GetForegroundWindow() != fg {
+		return ""
+	}
 	if n, _ := sendInputEvents(esc); n == 0 {
 		return ""
 	}

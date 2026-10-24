@@ -301,6 +301,26 @@ func TestClickAutoActivation(t *testing.T) {
 	if !r.IsError || m["error"] != codeTargetNotResponding || m["handle"] != float64(10) || m["pid"] == nil || !strings.Contains(m["next"].(string), "taskkill") || td.b.events() != "" {
 		t.Errorf("hung target: %v %q", m, td.b.events())
 	}
+	// A shell flyout the agent closed with Esc is reported, on success and in an activate_failed reason.
+	for _, focused := range []bool{true, false} {
+		f = backgroundAgent(focused)
+		focus := f.fn[proto.OpFocusWindow]
+		f.fn[proto.OpFocusWindow] = func(args any) (any, error) {
+			r, err := focus(args)
+			fr := r.(proto.FocusResult)
+			fr.Dismissed = "SearchHost.exe (class Windows.UI.Core.CoreWindow)"
+			return fr, err
+		}
+		td = newTestDeps(t, f)
+		id = td.put(options(), 1, nil)
+		r, m = td.call(t, "vm_click", map[string]any{"observation_id": id, "x": 1, "y": 1, "observe_after": "none"})
+		if focused && (r.IsError || m["dismissed"] != "SearchHost.exe (class Windows.UI.Core.CoreWindow)") {
+			t.Errorf("dismissed on success: %v", m)
+		}
+		if !focused && (!r.IsError || m["error"] != codeActivateFailed || !strings.Contains(m["reason"].(string), "Esc closed the shell flyout SearchHost.exe")) {
+			t.Errorf("dismissed in activate_failed: %v", m)
+		}
+	}
 	// activate: false keeps the strict rule and never asks for focus.
 	f = backgroundAgent(true)
 	td = newTestDeps(t, f)

@@ -76,6 +76,8 @@ type action struct {
 	listErr error
 	obs     *observation
 	mutated bool // a mutating call was dispatched, even if its result is an error
+	// dismissed names the shell flyout the agent closed with Esc before activating the target, "" when none.
+	dismissed string
 }
 
 // run pins the VM, holds d.input while body checks and performs the action, then releases it and adds the
@@ -89,13 +91,13 @@ func (d *deps) run(ctx context.Context, vm string, after afterIn, defaultAfter s
 	if err != nil {
 		return nil, err
 	}
+	a := &action{d: d, ctx: ctx, vm: v.Name}
 	out, err := func() (*actionOut, error) {
 		d.input.Lock()
 		defer d.input.Unlock()
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		a := &action{d: d, ctx: ctx, vm: v.Name}
 		defer func() {
 			if a.mutated {
 				d.taskObs(ctx).revise(v.Name)
@@ -115,6 +117,9 @@ func (d *deps) run(ctx context.Context, vm string, after afterIn, defaultAfter s
 		window = refOf(*out.window)
 	}
 	obj["window"] = window
+	if a.dismissed != "" {
+		obj["dismissed"] = a.dismissed
+	}
 	if mode == afterNone {
 		return jsonResult(obj)
 	}
@@ -284,6 +289,7 @@ func (a *action) activate(target proto.WindowInfo, activate bool) (proto.WindowI
 		}
 		return target, a.activateFailed(target, err.Error())
 	}
+	a.dismissed = r.Dismissed
 	if err := a.relist(); err != nil {
 		return target, agentRequired(err)
 	}
@@ -295,7 +301,11 @@ func (a *action) activate(target proto.WindowInfo, activate bool) (proto.WindowI
 		return target, err
 	}
 	if fg, ok := foreground(a.ws.Windows); !ok || !inGroup(a.ws.Windows, cur, fg.Handle) {
-		return cur, a.activateFailed(cur, "another window kept the foreground")
+		cause := "another window kept the foreground"
+		if a.dismissed != "" {
+			cause += fmt.Sprintf(" (Esc closed the shell flyout %s first)", a.dismissed)
+		}
+		return cur, a.activateFailed(cur, cause)
 	}
 	return cur, nil
 }
