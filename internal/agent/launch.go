@@ -60,7 +60,8 @@ var procCoCreateInstance = windows.NewLazySystemDLL("ole32.dll").NewProc("CoCrea
 
 // activatePackagedApp activates the packaged (UWP/MSIX) application aumid with arguments through
 // IApplicationActivationManager::ActivateApplication and returns the PID of its process. An application that is
-// already running is brought to the front and its existing PID returned.
+// already running is handled as the app chooses: a single-instance app is brought to the front and its existing PID
+// returned, a multi-instance app starts another process.
 func activatePackagedApp(aumid, arguments string) (uint32, error) {
 	if !packagedAUMID(aumid) {
 		return 0, fmt.Errorf("aumid %q is not a packaged application's ID (PackageFamilyName!ApplicationId); take launch.aumid from vm_apps", aumid)
