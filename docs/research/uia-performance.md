@@ -19,7 +19,7 @@ On a 2,234-node WPF fixture the observation median went from 12775.714 to 8667.5
 
 ## Per-parent child limit (2026-10-24)
 
-AutoCAD 2015 main window with a new drawing, `vm_observe` with `max_depth: 10, max_nodes: 1000`, one sample through MCP after the per-parent child limit (4.3): 612 nodes in 7792 ms, `controls_truncated: true`. The ribbon's root pane had 103 direct children: the 15 visible ones (the active tab's panel bar, the tab buttons, the tab control) were read and the 88 offscreen panel bars of the other tabs were left out (`omitted_children=88`). Before the limit the same call ran into the 10-second deadline (2026-10-11). Same guest as above.
+AutoCAD 2015 main window with a new drawing, `vm_observe` with `max_depth: 10, max_nodes: 1000`, one sample through MCP after the per-parent child limit (4.3): 612 nodes in 7792 ms, `controls_truncated: true`. The ribbon's root pane had 103 direct children: the 15 visible ones (the active tab's panel bar, the tab buttons, the tab control) were read and the 88 offscreen panel bars of the other tabs were left out (`omitted_children=88`). The same call ran into the 10-second deadline on 2026-10-11, before the property caches; there is no measurement with the caches but without the limit, so the share of each change is unknown. Same guest as above.
 
 ## Large WPF fixture (2026-10-10)
 
