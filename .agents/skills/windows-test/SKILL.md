@@ -13,10 +13,14 @@ What the script does and why it runs on the host: [Building](../../../docs/build
 The script compiles into `%TEMP%\<name>` on the host and deletes that directory first. Several runs at once (subagents in their own worktrees, a reviewer and an implementer) need different names, or they delete each other's executables:
 
 ```sh
-export HH_TEST_NAME=hyperhand-tests-<worktree or task>   # letters, digits, '.', '_' or '-'
+export HH_TEST_NAME=hyperhand-tests-<worktree or task>   # letters, digits, '.', '_' or '-'; not . or ..
 ```
 
-A single run on the main checkout may keep the default `hyperhand-tests`. Delete a directory you named when your work ends (`rm -rf "$(wslpath "$(/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command '[IO.Path]::GetTempPath()' | tr -d '\r')")$HH_TEST_NAME"`).
+A single run on the main checkout may keep the default `hyperhand-tests`. Delete a directory you named when your work ends, in the shell where `HH_TEST_NAME` is set; `${HH_TEST_NAME:?}` stops the command when it is not, which would otherwise delete all of `%TEMP%`:
+
+```sh
+rm -rf "$(wslpath "$(/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command '[IO.Path]::GetTempPath()' | tr -d '\r')")${HH_TEST_NAME:?}"
+```
 
 ## 2. Run
 

@@ -7,10 +7,15 @@ repository root:
 
     run = Run("Win10", "child-limit")
     run.checkpoint()
-    ...
-    run.check("long list omitted", omitted == 1201, {"omitted": omitted})
-    run.cleanup()
-    run.save()
+    try:
+        ...
+        run.check("long list omitted", omitted == 1201, {"omitted": omitted})
+    finally:
+        run.cleanup()
+        run.save()
+
+The checkpoint's ID is kept in the evidence directory, so a runner restarted after a crash (or a separate
+cleanup-only call) still restores it.
 
 Standard library only, like client/hyperhand_client.py.
 """
@@ -22,7 +27,7 @@ import sys
 import time
 
 sys.path.insert(0, "client")
-from hyperhand_client import HyperHand, new_task_id  # noqa: E402
+from hyperhand_client import HyperHand, HyperHandError, new_task_id  # noqa: E402
 
 
 def png_size(path):
@@ -49,8 +54,13 @@ class Run:
             self.task_id = f.read().strip()
         self.hh = HyperHand(vm=vm, task_id=self.task_id, out_dir=self.dir, timeout=timeout)
         self.results = {}
+        self.state_file = os.path.join(self.dir, "checkpoint.json")
         self.checkpoint_id = None
         self.checkpoints_before = None
+        if os.path.exists(self.state_file):  # a previous process of this run took the checkpoint
+            with open(self.state_file) as f:
+                state = json.load(f)
+            self.checkpoint_id, self.checkpoints_before = state["id"], state["before"]
 
     def call(self, tool, **args):
         return self.hh.call(tool, **args)
@@ -72,24 +82,40 @@ class Run:
     # Checkpoint and cleanup (Manual verification: before and after a run).
 
     def checkpoint(self, label="acceptance"):
-        self.checkpoints_before = sorted(c["id"] for c in self.call("vm_checkpoints")["checkpoints"])
+        """Takes the temporary checkpoint once per run; a restarted runner reuses the one already taken."""
+        if self.checkpoint_id:
+            return {"id": self.checkpoint_id}
+        before = sorted(c["id"] for c in self.call("vm_checkpoints")["checkpoints"])
         r = self.call("vm_checkpoint", label=label)
-        self.checkpoint_id = r["id"]
+        self.checkpoint_id, self.checkpoints_before = r["id"], before
+        with open(self.state_file, "w") as f:
+            json.dump({"id": self.checkpoint_id, "before": before}, f)
         return r
 
     def cleanup(self):
-        """Restores the temporary checkpoint and ends the task. A host reinstall during the run gives the task a new
-        run ID, so vm_end_turn no longer owns the run's temp checkpoint; all_temp removes it then."""
-        if self.checkpoint_id:
-            self.call("vm_restore", id=self.checkpoint_id)
-        end = self.call("vm_end_turn")
-        left = sorted(c["id"] for c in self.call("vm_checkpoints")["checkpoints"])
-        if self.checkpoints_before is not None and left != self.checkpoints_before:
-            end = self.call("vm_end_turn", vm=self.vm, all_temp=True)
-            left = sorted(c["id"] for c in self.call("vm_checkpoints")["checkpoints"])
-        host = HyperHand(vm=self.vm).call("vm_exec", command="hostname")
-        return self.check("cleanup", (self.checkpoints_before is None or left == self.checkpoints_before) and not end["errors"] and not end["skipped"] and host["exit_code"] == 0,
-                          {"end_turn": end, "checkpoints_before": self.checkpoints_before, "checkpoints_after": left})
+        """Restores the temporary checkpoint and ends the task on this VM, then checks that every checkpoint the run
+        added is gone and that a new task can write. A host reinstall during the run gives the task a new run ID, so
+        vm_end_turn no longer owns the run's temp checkpoint; all_temp removes it then. Errors become a failed check."""
+        try:
+            if self.checkpoint_id:
+                self.call("vm_restore", id=self.checkpoint_id)
+            end = self.call("vm_end_turn")
+            left = [c["id"] for c in self.call("vm_checkpoints")["checkpoints"]]
+            if self.checkpoint_id in left:
+                end = self.call("vm_end_turn", vm=self.vm, all_temp=True)
+                left = [c["id"] for c in self.call("vm_checkpoints")["checkpoints"]]
+            added = sorted(set(left) - set(self.checkpoints_before or []))
+            # The write check uses the MCP session's default task ("" task ID), which ends when the session closes,
+            # so it does not keep the VM's write ownership.
+            with HyperHand(vm=self.vm, task_id="") as probe:
+                host = probe.call("vm_exec", command="hostname")
+        except HyperHandError as e:
+            return self.check("cleanup", False, {"error": e.obj})
+        ok = self.check("cleanup", not added and not end["errors"] and not end["skipped"] and host["exit_code"] == 0,
+                        {"end_turn": end, "checkpoints_added_and_left": added})
+        if ok and os.path.exists(self.state_file):
+            os.remove(self.state_file)
+        return ok
 
     # Independent state in the guest.
 

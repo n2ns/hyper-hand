@@ -13,7 +13,7 @@ go vet ./cmd/... ./internal/...
 wintemp=$("$ps" -NoProfile -Command '[IO.Path]::GetTempPath()' | tr -d '\r')
 name=${HH_TEST_NAME:-hyperhand-tests}
 case $name in
-''|*[!A-Za-z0-9._-]*) echo "HH_TEST_NAME must be letters, digits, '.', '_' or '-'" >&2; exit 2 ;;
+''|.|..|*[!A-Za-z0-9._-]*) echo "HH_TEST_NAME must be letters, digits, '.', '_' or '-', and not . or .." >&2; exit 2 ;;
 esac
 dir="$(wslpath "$wintemp")$name"
 rm -rf "$dir"
