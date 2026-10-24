@@ -72,8 +72,8 @@ func (d *deps) observeVM(ctx context.Context, in observeIn) (*observeOut, []byte
 	if in.MaxDepth < 0 || in.MaxDepth > limitMaxDepth || in.MaxNodes < 0 || in.MaxNodes > limitMaxNodes {
 		return nil, nil, refuse(codeInvalidArgument, fmt.Sprintf("pass max_depth 0..%d and max_nodes 0..%d (0 uses the defaults %d and %d)", limitMaxDepth, limitMaxNodes, defaultMaxDepth, defaultMaxNodes), nil, "max_depth %d, max_nodes %d out of range", in.MaxDepth, in.MaxNodes)
 	}
-	if in.MaxSize < 0 {
-		return nil, nil, refuse(codeInvalidArgument, "pass max_size 0 (original size) or a positive longest side in pixels", nil, "max_size %d is negative", in.MaxSize)
+	if in.MaxSize < -1 {
+		return nil, nil, refuse(codeInvalidArgument, "pass max_size 0 or omit it (shrink to the token budget: longest side at most 1568 and at most 1568 tiles of 28x28 pixels), -1 (original size) or a positive longest side in pixels", nil, "max_size %d is invalid", in.MaxSize)
 	}
 	if in.MaxDepth == 0 {
 		in.MaxDepth = defaultMaxDepth

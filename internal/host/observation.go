@@ -22,7 +22,7 @@ type observeIn struct {
 	Controls      bool   `json:"controls,omitempty" jsonschema:"include the UI Automation control tree as indexed text; default false"`
 	MaxDepth      int    `json:"max_depth,omitempty" jsonschema:"control tree depth; default 4, maximum 10"`
 	MaxNodes      int    `json:"max_nodes,omitempty" jsonschema:"control tree size; default 200, maximum 1000"`
-	MaxSize       int    `json:"max_size,omitempty" jsonschema:"longest side of the output image in pixels; 0 keeps the original size, never upscales"`
+	MaxSize       int    `json:"max_size,omitempty" jsonschema:"output image size: default 0 shrinks to the model token budget (longest side at most 1568 and at most 1568 tiles of 28x28 pixels; an image already within it is unchanged); -1 keeps the original size; a positive value caps the longest side in pixels; never upscales. Actions still take image pixels of the returned image"`
 	DiffFrom      string `json:"diff_from,omitempty" jsonschema:"a previous observation_id of the same window: controls then lists only added, removed and changed nodes"`
 }
 
