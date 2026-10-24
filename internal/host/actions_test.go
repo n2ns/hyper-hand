@@ -339,6 +339,28 @@ func TestClickAutoActivation(t *testing.T) {
 	if r, m := td.call(t, "vm_click", map[string]any{"observation_id": id, "x": 1, "y": 1}); !r.IsError || m["error"] != codeActivateFailed || !strings.Contains(m["next"].(string), "close the shell flyout (handle 30, SearchHost.exe) with vm_key esc") {
 		t.Errorf("shell flyout next: %v", m)
 	}
+	// focus_window fails after its Esc closed the flyout: the refusal names the current foreground, not the closed flyout.
+	f = backgroundAgent(false)
+	fgNow := uint64(30)
+	f.fn[proto.OpListWindows] = func(any) (any, error) {
+		ws := testWindows()
+		for i := range ws {
+			ws[i].Foreground = ws[i].Handle == fgNow
+			if ws[i].Handle == 30 {
+				ws[i].Process = "SearchHost.exe"
+			}
+		}
+		return proto.WindowsResult{Windows: ws, Foreground: fgNow, Session: &proto.SessionStateResult{Console: true}}, nil
+	}
+	f.fn[proto.OpFocusWindow] = func(any) (any, error) {
+		fgNow = 0
+		return nil, errors.New("could not bring window 10 to the foreground (Esc closed the shell flyout SearchHost.exe (class Windows.UI.Core.CoreWindow) first)")
+	}
+	td = newTestDeps(t, f)
+	id = td.put(options(), 1, nil)
+	if r, m := td.call(t, "vm_click", map[string]any{"observation_id": id, "x": 1, "y": 1}); !r.IsError || m["error"] != codeActivateFailed || strings.Contains(m["next"].(string), "close the shell flyout") || m["foreground"] != nil {
+		t.Errorf("stale flyout after a failed focus: %v", m)
+	}
 	// activate: false keeps the strict rule and never asks for focus.
 	f = backgroundAgent(true)
 	td = newTestDeps(t, f)
