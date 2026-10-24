@@ -10,22 +10,22 @@ The criteria are in [Manual verification](../../../docs/manual-verification.md):
 
 ## 1. Preflight
 
-1. `scripts/test-windows.sh` passes (and `python3 -m unittest discover -s client` when the client changed).
+1. The automated tests pass (the `windows-test` skill).
 2. Install with the `dev-install` skill and update the VM's agent.
 3. Hashes: `sha256sum "/mnt/c/Program Files/HyperHand/hyperhand.exe" "/mnt/c/Program Files/HyperHand/hyperhand-agent.exe"` equal the files in `build/dev-install/`; `hh vm_file_info paths='["%LOCALAPPDATA%\\HyperHand\\hyperhand-agent.exe"]'` gives the agent's hash in the guest.
-4. `hh vm_doctor`: every check `ok`. Note what exists before the run: `hh vm_checkpoints`, `hh vm_windows`.
+4. `hh vm_doctor`: every check `ok`. Note what exists before the run: `hh vm_checkpoints`, `hh vm_windows`. A VM without automatic sign-in that was off waits at the sign-in screen after `vm_start` (`agent_required`); ask the user to sign in. Read the screen size from an original-size screenshot (`Run.screen_size()`) instead of trusting the local notes.
 
 ## 2. Run
 
-1. Create the evidence directory `build/<item>-<yyyymmdd>/` (ignored by git) and the task file in it, then `hh vm_checkpoint label=<item>`; keep the returned `id`.
-2. Write the runner as a script in that directory (Python with `client/hyperhand_client.py` as a module, or `hh` calls), so the run can be repeated. Every step checks independent state (a fixture's state file, process identity, file hashes, a fresh observation), not the tool's own report; save JSON results and screenshots next to it.
+1. Write the runner as a script in `build/<item>-<yyyymmdd>/` (ignored by git), so the run can be repeated. Use [acceptance.py](acceptance.py): `Run(vm, item)` creates that directory, its task file and the client; `run.checkpoint()` takes the temporary checkpoint; `run.check(name, condition, evidence)` records each check and `run.save()` writes the results. Give each check its own function and run them selectively (for example through an `ONLY` environment variable), so a failed check can be repeated alone.
+2. Every check uses independent state, not the tool's own report: `png_size` of the saved screenshot, `run.guest_cursor()` after a click, `run.process_name(pid)`, `run.foreground()`, a fixture's state file, file hashes or a fresh observation. Fixtures: `run.list_fixture(counts)` (Win32 lists with every item exposed), `run.open_start_flyout()`, and the setups in [Manual verification](../../../docs/manual-verification.md#setups-for-specific-checks). Stop the processes you started (`run.stop_process`).
 3. Change guest settings only inside the checkpoint. Host settings (enhanced session mode, a VM's memory or checkpoint type) need the user or `vm_set_checkpoint_type`; set them back afterwards.
 4. On a failure, first decide whether the product, the fixture or the runner is wrong; a product defect is reproduced, fixed in its own commit and the run repeated on the new build.
 
 ## 3. Clean up
 
-1. `hh vm_restore id=<checkpoint id>`, then `hh vm_end_turn`: `errors` and `skipped` are empty.
-2. `hh vm_checkpoints` lists only what existed before; `hh vm_doctor` is all `ok`; the agent's hash is unchanged; a call with a new task (`python3 client/hyperhand_client.py --vm <vm> vm_exec command=hostname`) succeeds, so ownership was released.
+1. `run.cleanup()` restores the checkpoint and calls `vm_end_turn`; when the host was reinstalled during the run (a new run ID no longer owns the temp checkpoint) it removes it with `all_temp: true`. It checks that `errors` and `skipped` are empty, that `vm_checkpoints` lists only what existed before and that a new task can write (ownership was released).
+2. `hh vm_doctor` is all `ok` and the agent's hash is unchanged; a restored checkpoint can hold an older agent, so update it again (`dev-install` skill, step 2) when it does.
 
 ## 4. Record the outcome
 
@@ -33,5 +33,5 @@ Results are not written up as records ([document map](../../../docs/doc-map.md#r
 
 - Passed: remove the item, or its passed part, from [TODO](../../../TODO.md). A conclusion users rely on becomes a sentence in README's Known limitations.
 - Not passed or not run: keep or narrow the TODO item with what is still open.
-- Facts learned about Hyper-V, Windows, UI Automation or AutoCAD go to [research](../../../docs/research/) with date, environment and how they were observed; changed behavior goes to its Features chapter.
+- Facts learned about Hyper-V, Windows, UI Automation or an application go to [research](../../../docs/research/) with date, environment and how they were observed; changed behavior goes to its Features chapter.
 - Report to the user: build version, what passed, what failed or was not run, and where the evidence is.

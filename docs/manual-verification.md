@@ -16,7 +16,7 @@ How to accept a HyperHand change on the installed host and a real guest. Results
 
 ## During a run
 
-- Drive the tools with [`client/hyperhand_client.py`](../client/README.md) and one task (`--task-file`), from a runner script kept with the evidence.
+- Drive the tools with [`client/hyperhand_client.py`](../client/README.md) and one task (`--task-file`), from a runner script kept with the evidence; the `vm-acceptance` skill's `acceptance.py` provides the task, checkpoint, cleanup, independent checks and generic fixtures.
 - Check every result against independent state, not against the tool's own report: a fixture that publishes its state to a separate file (written to a temporary file in the same directory and renamed, so the runner never reads half a file), process identity, file hashes, checkpoint listings or a fresh observation. `applied_chars` counts characters sent, not processed.
 - A fixture must not fail on its own: an unhandled exception dialog in a WinForms fixture once took the focus and swallowed typed characters, which looked like lost input.
 - Record which build ran each step. Coverage by unit tests is stated as such and is not counted as installed behavior.
@@ -25,7 +25,8 @@ How to accept a HyperHand change on the installed host and a real guest. Results
 
 ## After a run
 
-- Restore the temporary checkpoint and call `vm_end_turn`; its `errors` and `skipped` are empty and the checkpoint listing holds only the checkpoints that existed before.
+- Restore the temporary checkpoint and call `vm_end_turn`; its `errors` and `skipped` are empty and the checkpoint listing holds only the checkpoints that existed before. A host reinstall during the run gives the task a new run ID that does not own the run's temp checkpoint; remove it with `vm_end_turn` `all_temp: true` for that VM.
+- A restored checkpoint can hold an older guest agent; update it again when its version differs from the build.
 - The running guest agent still has the expected hash, `vm_doctor` reports every check `ok`, the guest clipboard is restored, and a new task can write (ownership was released).
 - Host settings the run changed (enhanced session mode, a VM's checkpoint type or memory) are set back.
 
@@ -42,6 +43,11 @@ How to accept a HyperHand change on the installed host and a real guest. Results
 | Busy AutoCAD | An AutoLISP loop that creates many entities (1.5 million circles hang the main window for about a minute). |
 | Mirror interruption | A large source file (3 GiB) and an extra file in the target, so a partial apply is visible; interrupt during the stream (MCP cancellation, or `dev-install --no-build`) and check for leftover `.hhpart` and `hyperhand-mirror-*` files on host and guest. |
 | Old agent | Push the agent of an older release into the guest and start its `install`; tools then return `agent_outdated` until `vm_update_agent`. |
+| Long control lists | A WinForms window with Win32 `ListBox`es of, for example, 150 and 1,200 items, which expose every item to UI Automation. File Explorer's item view is not one: it exposes only realized items ([Windows fact 15](research/windows.md#explorer)). |
+| Packaged apps | Calculator and Settings are packaged on Windows 10. Calculator is multi-instance: a second activation starts another process ([Windows fact 12](research/windows.md#packaged-apps)); stop every instance you started. |
+| Shell flyout | A raw Windows key press opens the Start flyout; its process depends on the Windows build and `vm_windows` does not list it ([Windows fact 13](research/windows.md#shell-flyouts)). |
+| Screenshot size | Compare the saved PNG's header with the expected size, and read the screen size from a `max_size: -1` screenshot first. |
+| Opening a folder | Start Explorer with `vm_exec` (`Start-Process explorer.exe -ArgumentList <folder>`) and find the window by title; `vm_launch` of `explorer.exe` cannot follow it ([Windows fact 14](research/windows.md#explorer)). |
 | Typing into the Run dialog | Keep commands at 259 characters or fewer after variable expansion ([Windows fact 4](research/windows.md#input-and-focus)). |
 
 ## Release package

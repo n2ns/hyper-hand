@@ -17,6 +17,7 @@ Read the relevant sections before changing behavior; a task does not require rea
 | Host installer, service, tray or VMConnect viewer | [Host tray](docs/features/host-tray.md); [Hyper-V research](docs/research/hyper-v.md#vmconnect). |
 | Behavior that depends on Hyper-V, Windows, UI Automation or AutoCAD | The facts in [research](docs/research/); re-verify the affected ones after upgrades. |
 | Building, tests, development installs or releasing | [Building](docs/building.md). |
+| Running the automated tests, also from parallel worktrees, and reproducing a defect before fixing it | The `windows-test` skill ([SKILL.md](.agents/skills/windows-test/SKILL.md)). |
 | Installing a build on the host and updating guest agents | The `dev-install` skill ([SKILL.md](.agents/skills/dev-install/SKILL.md)). |
 | Accepting a change on a real VM | [Manual verification](docs/manual-verification.md) and the `vm-acceptance` skill ([SKILL.md](.agents/skills/vm-acceptance/SKILL.md)); [TODO](TODO.md) for pending checks. |
 | Releasing a version | The `release` skill ([SKILL.md](.agents/skills/release/SKILL.md)); the tag push needs explicit authorization. |

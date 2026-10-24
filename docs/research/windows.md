@@ -34,3 +34,8 @@ Environment unless stated otherwise: guest `Win10` (Windows 10, Chinese UI, 1920
 ### Shell flyouts
 
 13. **The Windows key's flyout on Windows 10 22H2 is a `SearchApp.exe` window and closes on one Esc.** After a raw Windows key press the foreground window was of process `SearchApp.exe`, class `Windows.UI.Core.CoreWindow`, and was not among the windows `vm_windows` listed (its `foreground` named no listed window); the agent's single injected Esc closed it and `SetForegroundWindow` then activated AutoCAD 2015, which did not enter key-tip mode and kept an empty command line. Runtime on the Chinese Windows 10 Pro 22H2 AutoCAD test VM, 2026-10-24. Used by [4.4](../features/observation-input.md#44-actions-targets-check-chain-activation-and-observe_after) step 5.
+
+### Explorer
+
+14. **Starting `explorer.exe` with a folder hands it to the running shell.** `vm_launch` of `C:\Windows\explorer.exe` with a folder argument opened the folder in a window of the already running Explorer process, while the started process exited without a window, so `vm_launch` reported `no_window` after its wait. Runtime on the Chinese Windows 10 Pro 22H2 general test VM, 2026-10-24.
+15. **File Explorer's item view exposes only realized items.** A File Explorer window showing `C:\Windows\System32` (thousands of files) had 232 control-view nodes, and an exact name search for a file outside the view found nothing; the item view creates UI Automation elements for the items it has realized. A Win32 `ListBox` exposed all 1,200 of its items. Runtime on the same VM, 2026-10-24.

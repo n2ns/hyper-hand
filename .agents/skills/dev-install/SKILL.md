@@ -42,5 +42,6 @@ An agent that does not answer needs `vm_install_agent` instead (guest keyboard i
 
 - `python3 client/hyperhand_client.py --vm <vm> vm_status`: `agent.version` is the version printed in step 1.
 - `python3 client/hyperhand_client.py --vm <vm> vm_doctor`: every check `ok`.
+- When the installer changed: `/mnt/c/Windows/System32/sc.exe qfailure HyperHandService` shows `RESET_PERIOD` 86400 and restarts after 5000, 30000 and 60000 ms, and `sc.exe qfailureflag HyperHandService` shows `TRUE` ([Host tray](../../../docs/features/host-tray.md)). Ending the service process to watch the restart needs an elevated prompt; ask the user (`taskkill /PID <pid> /F`, then `sc query HyperHandService` after 5 s).
 
 For an acceptance run, also compare the hashes as described in the `vm-acceptance` skill.

@@ -33,7 +33,7 @@ Which document owns which kind of information, and the rules for keeping them. R
 | Document | Owns (not) |
 |---|---|
 | [AGENTS.md](../AGENTS.md) / [CLAUDE.md](../CLAUDE.md) | Agent rules, safety boundaries for the host and the test VMs, build and verify commands, task routing (not a full reference); CLAUDE.md imports AGENTS.md and adds only Claude Code-specific rules. |
-| [Skills](../.agents/skills/) | Step-by-step agent procedures: installing a development build, running an acceptance check on a real VM, preparing a release (not the rules, which stay in AGENTS.md, nor acceptance criteria, which stay in Manual verification). `.claude/skills/` links to them for Claude Code. |
+| [Skills](../.agents/skills/) | Step-by-step agent procedures: running the automated tests, installing a development build, running an acceptance check on a real VM (with its helper module `acceptance.py`), preparing a release (not the rules, which stay in AGENTS.md, nor acceptance criteria, which stay in Manual verification). `.claude/skills/` links to them for Claude Code. |
 | [Document map](doc-map.md) | These tables and the documentation rules below. |
 
 ## Rules
