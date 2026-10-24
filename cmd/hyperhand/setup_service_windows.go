@@ -59,6 +59,10 @@ func installService(m *mgr.Mgr, hostExe, ownerSID string, exists bool) error {
 	if err := s.SetRecoveryActions(serviceRecoveryActions(), serviceRecoveryResetSeconds); err != nil {
 		return fmt.Errorf("set service recovery actions: %w", err)
 	}
+	// Also restart the service when it stops itself with a service-specific exit code (a failing listener).
+	if err := s.SetRecoveryActionsOnNonCrashFailures(true); err != nil {
+		return fmt.Errorf("set service recovery on non-crash failures: %w", err)
+	}
 	// 0x20015: READ_CONTROL, SERVICE_QUERY_CONFIG, SERVICE_QUERY_STATUS and SERVICE_START.
 	sd, err := windows.SecurityDescriptorFromString("D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x20015;;;" + ownerSID + ")")
 	if err != nil {

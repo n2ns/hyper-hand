@@ -317,7 +317,11 @@ func (a *action) activateFailed(target proto.WindowInfo, cause string) error {
 		return refuse(codeActivateFailed, "call vm_observe (whole screen) to see what is on the screen", map[string]any{"foreground": nil}, "window %s could not be activated: %s; no window is in the foreground", describe(target), cause)
 	}
 	next := fmt.Sprintf("act on handle %d first", fg.Handle)
-	if fg.PID != target.PID {
+	if proto.ShellFlyout(fg.Process, fg.Class) {
+		// Esc from the agent did not close it (UIPI drops injected keys to a flyout of higher integrity); the Hyper-V
+		// keyboard's raw input is not filtered.
+		next = fmt.Sprintf("close the shell flyout (handle %d, %s) with vm_key esc without handle and pid, then retry", fg.Handle, fg.Process)
+	} else if fg.PID != target.PID {
 		next = fmt.Sprintf("act on handle %d first: it belongs to %s and probably is a dialog that blocks the target", fg.Handle, fg.Process)
 	}
 	return refuse(codeActivateFailed, next, map[string]any{"foreground": refOf(fg)}, "window %s could not be activated: %s; the foreground window is %s", describe(target), cause, describe(fg))

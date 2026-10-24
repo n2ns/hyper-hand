@@ -115,6 +115,7 @@ func (b *vmToolsBackend) Find(name string) (hyperv.VM, error) {
 	}
 	return hyperv.VM{}, errors.New("VM \"" + name + "\" not found")
 }
+
 // SetCheckpointType changes the tree's checkpoint setting and records the call.
 func (b *vmToolsBackend) SetCheckpointType(vm, t string) error {
 	b.mu.Lock()

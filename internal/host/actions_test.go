@@ -321,6 +321,24 @@ func TestClickAutoActivation(t *testing.T) {
 			t.Errorf("dismissed in activate_failed: %v", m)
 		}
 	}
+	// A shell flyout that keeps the foreground is closed with raw Esc.
+	f = backgroundAgent(false)
+	list := f.fn[proto.OpListWindows]
+	f.fn[proto.OpListWindows] = func(args any) (any, error) {
+		r, err := list(args)
+		wr := r.(proto.WindowsResult)
+		for i := range wr.Windows {
+			if wr.Windows[i].Handle == 30 {
+				wr.Windows[i].Process, wr.Windows[i].Class = "SearchHost.exe", "Windows.UI.Core.CoreWindow"
+			}
+		}
+		return wr, err
+	}
+	td = newTestDeps(t, f)
+	id = td.put(options(), 1, nil)
+	if r, m := td.call(t, "vm_click", map[string]any{"observation_id": id, "x": 1, "y": 1}); !r.IsError || m["error"] != codeActivateFailed || !strings.Contains(m["next"].(string), "close the shell flyout (handle 30, SearchHost.exe) with vm_key esc") {
+		t.Errorf("shell flyout next: %v", m)
+	}
 	// activate: false keeps the strict rule and never asks for focus.
 	f = backgroundAgent(true)
 	td = newTestDeps(t, f)

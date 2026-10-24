@@ -205,17 +205,11 @@ func focusWindow(_ context.Context, args json.RawMessage, _ []byte) (any, []byte
 	return proto.FocusResult{Text: title, Handle: uint64(found), Dismissed: dismissed}, nil, nil
 }
 
-// shellFlyoutProcesses are the image names (lower case) of the shell processes whose foreground windows are flyouts
-// that close on Esc: Start, search, action center and notification flyouts, the touch keyboard and emoji panel.
-var shellFlyoutProcesses = []string{
-	"startmenuexperiencehost.exe", "searchhost.exe", "searchapp.exe", "searchui.exe", "shellexperiencehost.exe", "textinputhost.exe",
-}
-
 // shellOverlay reports whether a foreground window of this process image name and window class is a shell flyout
 // that focus_window may close with Esc. No other window gets a key: ribbon programs such as AutoCAD enter key-tip
 // mode or cancel a command on injected keys.
 func shellOverlay(process, class string) bool {
-	return slices.Contains(shellFlyoutProcesses, strings.ToLower(process)) || strings.EqualFold(class, "Shell_LightDismissOverlay")
+	return proto.ShellFlyout(process, class)
 }
 
 // dismissShellOverlay presses Esc once when the foreground window, other than target, is a shell flyout (see
