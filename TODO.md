@@ -10,7 +10,7 @@ References: [tool behavior](docs/features.md), [how to run acceptance checks](do
 
 Run these as described in [Manual verification](docs/manual-verification.md): check against independent state and keep unit coverage apart from installed behavior. Remove an item, or its passed part, once it passes.
 
-- [ ] **Setup wizard remaining acceptance:** use another administrator's credentials at UAC and verify the original installing owner is retained. Validate WinGet install/upgrade/uninstall with the release manifest before its submission.
+- [ ] **Setup wizard remaining acceptance:** use another administrator's credentials at UAC and verify the original installing owner is retained.
 - [ ] **Host tray Restart menu:** click the actual menu and verify replacement of the old tray, MCP recovery and absence of duplicate instances. Installer-driven replacement is not equivalent coverage.
 - [ ] **Host self-uninstall:** start uninstall from the installed executable; verify self-removal/deferred cleanup, service/task/socket registration cleanup and successful reinstallation.
 - [ ] **Display configurations:** test non-default DPI, multiple monitors and negative coordinate origins. Verify screenshot coordinates and actual input targets.

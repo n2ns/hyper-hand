@@ -22,6 +22,8 @@ Download from [Releases](https://github.com/n2ns/hyper-hand/releases):
 
 All three install the same host and agent executables to `%ProgramFiles%\HyperHand`. The wizard and single-file command-line package contain the guest agent; no separate download is needed. The ZIP is not a portable installation.
 
+The release executables are unsigned. Windows SmartScreen may ask for confirmation before running a downloaded installer, including one downloaded by WinGet. Check that it is the expected release from the repository above before choosing **More info > Run anyway**.
+
 To build from source instead, see [Building HyperHand](building.md#build).
 
 When installing or updating from the zip, keep `hyperhand-agent.exe` in the same directory as `hyperhand.exe`; it takes precedence over an agent built into `hyperhand.exe`. Guest installation and update use the installed agent executable.
@@ -241,6 +243,8 @@ On the host:
    ```
 
    It requests elevation if needed, stops the installed tray and service, removes `HyperHandService` and its Hyper-V Administrators membership, the `HyperHand` logon task, the `HyperHand Console` task, the Hyper-V socket registration and the Apps and Features entry. Uninstalling from Apps and Features runs the same command. From an elevated prompt, `hyperhand.exe uninstall --quiet` does the same without dialogs (for scripts and package managers); it exits with code 1 on failure and writes the reason to `%LOCALAPPDATA%\HyperHand\hyperhand.log`. A protected cleanup helper waits for the installed executable to exit and removes the installed host and agent executables only if their hashes still match. The helper, `%ProgramData%\HyperHand\uninstall-cleanup.exe`, cannot delete itself; it is deleted at the next restart.
+
+   WinGet uses the registered quiet uninstall command. Run `winget uninstall --name HyperHand --exact` from an elevated terminal; an ordinary terminal fails because quiet uninstall requires an already elevated process.
 
    User logs under `%LOCALAPPDATA%\HyperHand`, files inside guests and nonempty `%ProgramData%\HyperHand\service-data` are preserved. When service data remains, `config.json` is retained as the owner marker for reinstallation. Otherwise it removes the owner configuration and empty installation/data directories. It does not claim to remove directories containing other files.
 2. Delete the folder with `hyperhand.exe` (the extracted release or the build directory).
