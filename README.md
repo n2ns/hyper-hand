@@ -56,7 +56,7 @@ Administrator approval is required to install, update or uninstall HyperHand on 
 
    Other clients: add a Streamable HTTP server with the URL `http://127.0.0.1:8770/mcp`. Start a new client session to load the tools.
 
-3. **Connect your VM.** Start it, log on and switch the guest keyboard to English. Ask the AI: "Install the HyperHand agent in Win10." Replace `Win10` with your VM's name. The guest agent starts at every logon from then on.
+3. **Connect your VM.** Start it and log on. Ask the AI: "Install the HyperHand agent in Win10." Replace `Win10` with your VM's name. The guest agent starts at every logon from then on.
 
 4. **Try a first task.** Ask the AI:
 
@@ -90,7 +90,7 @@ HyperHand has two executables and three roles:
 
 ## Known limitations
 
-- The guest keyboard must be in English mode while the agent is installed, because the install command is typed on the keyboard. Installing the agent by hand avoids this.
+- The agent install command is typed through the Hyper-V keyboard, which sends the characters themselves, so the guest's keyboard layout and input method do not matter in the tested setups (US, German and French layouts and Microsoft Pinyin on Windows 10 22H2). Japanese and Korean input methods and Windows 11 guests have not been tested; installing the agent by hand avoids typing.
 - HyperHand cannot sign a user in at the sign-in screen after a cold boot; use automatic sign-in. It can unlock a session that Windows locked later. The unlock password must be ASCII; store the PIN if the lock screen asks for one.
 - Screenshots and input act on the VM console, so they do not reach a remote desktop or enhanced session.
 - Commands that run as administrator need the guest's UAC set to elevate without prompting; otherwise the UAC prompt waits in the guest.

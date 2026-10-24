@@ -605,7 +605,7 @@ func registerVM(d *deps) {
 		}
 		return jsonResult(map[string]any{"satisfied": r.Satisfied, "elapsed_ms": time.Since(start).Milliseconds()})
 	})
-	addToolIn(d, toolSpec{name: "vm_install_agent", desc: "Install the HyperHand agent in the guest (copies it in and runs its installer via the Hyper-V keyboard; a user must be logged on and the guest IME in English mode), then wait until the agent launched by this installation answers. An already-running agent cannot confirm success. If it fails, look at the screen with vm_observe."}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
+	addToolIn(d, toolSpec{name: "vm_install_agent", desc: "Install the HyperHand agent in the guest (copies it in and runs its installer via the Hyper-V keyboard; a user must be logged on; the Hyper-V keyboard types the characters themselves, so the guest layout and input method do not matter in tested setups), then wait until the agent launched by this installation answers. An already-running agent cannot confirm success. If it fails, look at the screen with vm_observe."}, func(ctx context.Context, in vmIn) (*mcp.CallToolResult, error) {
 		v, err := backend.Find(in.VM)
 		if err != nil {
 			return nil, vmErr(err)

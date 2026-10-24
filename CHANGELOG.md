@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `vm_install_agent` no longer asks for the guest keyboard in English mode. The Hyper-V keyboard types the characters themselves, and the install command arrived unchanged with US, German and French layouts and with Microsoft Pinyin in Chinese mode on Windows 10 22H2; README, the user guide and the tool description say so. Japanese and Korean input methods and Windows 11 guests have not been tested.
+
 ## [0.5.0] - 2026-10-24
 
 The guest protocol moves to generation 6: after updating the host, run `vm_update_agent` for every VM; until then tools refuse its agent with `agent_outdated`.

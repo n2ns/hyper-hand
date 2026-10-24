@@ -87,7 +87,7 @@ Start a new session in the client afterwards. The tools are loaded when the sess
 Before you start:
 
 - The VM is running and a user is logged on to the desktop.
-- The guest keyboard layout and IME are in English mode. The install command is typed on the keyboard, and a non-English IME can swallow or alter the keystrokes. See [Set the guest default input method to English](#set-the-guest-default-input-method-to-english), or [install the agent manually](#install-the-guest-agent-manually).
+- Any keyboard layout or input method may be active. The install command is typed through the Hyper-V keyboard, which sends the characters themselves; it arrived unchanged with US, German and French layouts and with Microsoft Pinyin in Chinese mode ([Hyper-V fact 15](research/hyper-v.md#keyboard)). Japanese and Korean input methods have not been tested; if the command arrives garbled, see [Typed text is garbled or missing](#typed-text-is-garbled-or-missing).
 
 Ask the AI to call `vm_install_agent`. It:
 
@@ -102,7 +102,7 @@ The agent installer, running as the logged-on user:
 - Adds the value `HyperHandAgent` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` so it starts at that user's logon. No administrator rights are needed.
 - Starts the agent. A tray icon appears in the guest; its menu shows whether the host is connected.
 
-If the install fails, call `vm_observe` to see what the guest shows, fix the cause (for example the IME mode or a dialog in the way) and run `vm_install_agent` again.
+If the install fails, call `vm_observe` to see what the guest shows, fix the cause (for example a dialog in the way) and run `vm_install_agent` again.
 
 ### Install the guest agent manually
 
@@ -146,7 +146,7 @@ See [UAC](#uac) for every place a prompt can appear.
 
 ### Set the guest default input method to English
 
-If the guest uses a non-English input method by default, add the en-US language and make the US keyboard the default input method (in the guest, as the logged-on user):
+Only needed when an input method not covered by the tested setups alters typed text (see [Typed text is garbled or missing](#typed-text-is-garbled-or-missing)). Add the en-US language and make the US keyboard the default input method (in the guest, as the logged-on user):
 
 ```
 $list = Get-WinUserLanguageList
@@ -244,7 +244,7 @@ Tools that need the agent refuse with `agent_required`, or `vm_install_agent` re
 
 ### Typed text is garbled or missing
 
-The host keyboard sends key strokes, and a non-English IME in the guest can swallow or convert them. This affects `vm_install_agent` and `vm_type` without the agent. Switch the guest IME to English mode, or set English as the default input method (see above). [Installing the agent manually](#install-the-guest-agent-manually) avoids the problem for the install. With the agent installed, `vm_type` injects Unicode key events in the user's session and is not affected.
+The Hyper-V keyboard sends the characters themselves, so US, German and French layouts and Microsoft Pinyin (also in Chinese mode) leave them unchanged ([Hyper-V fact 15](research/hyper-v.md#keyboard)). An input method that was not tested (Japanese, Korean) could still alter them in `vm_install_agent` and `vm_type` without the agent: switch it to its English mode, or set English as the default input method (see [Set the guest default input method to English](#set-the-guest-default-input-method-to-english)). [Installing the agent manually](#install-the-guest-agent-manually) avoids the problem for the install. With the agent installed, `vm_type` injects Unicode key events in the user's session and is not affected.
 
 ### The screenshot is black or shows the lock screen
 

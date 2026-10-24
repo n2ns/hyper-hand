@@ -36,7 +36,7 @@ For each VM the work will use (the argument, or the VMs named in [AGENTS.md](../
 python3 client/hyperhand_client.py --vm <vm> vm_update_agent
 ```
 
-An agent that does not answer needs `vm_install_agent` instead (guest keyboard in English mode). A VM that is off keeps its old agent; tools refuse it with `agent_outdated` after it starts, and this step is repeated then.
+An agent that does not answer needs `vm_install_agent` instead. A VM that is off keeps its old agent; tools refuse it with `agent_outdated` after it starts, and this step is repeated then.
 
 ## 3. Check
 

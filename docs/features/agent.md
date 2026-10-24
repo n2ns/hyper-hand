@@ -4,7 +4,7 @@ Part of [HyperHand features](../features.md). Section numbers such as 8.6 refer 
 
 ### 8.1 vm_install_agent
 
-`vm_install_agent` installs the agent without a guest password. It needs a user logged on to the guest desktop and the guest IME in English mode.
+`vm_install_agent` installs the agent without a guest password. It needs a user logged on to the guest desktop. The Hyper-V keyboard types the characters themselves, so the guest's layout and input method do not change the command in the tested setups ([Hyper-V fact 15](../research/hyper-v.md#keyboard)).
 
 1. The ordinary tray reads `hyperhand-agent.exe` next to its own executable, normally under `%ProgramFiles%\HyperHand`, and streams it to the service.
 2. The service stages the contents in its working directory, enables the VM's Guest Service Interface if it is disabled (then waits 3 s) and copies the file with `Copy-VMFile` to `C:\Users\Public\HyperHand\hyperhand-agent.exe`, creating the path and overwriting. The service does not open a caller-supplied host source path.
