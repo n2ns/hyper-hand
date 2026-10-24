@@ -95,8 +95,8 @@ class Run:
         return r
 
     def cleanup(self):
-        """Restores the temporary checkpoint and ends the task on this VM, then checks that every checkpoint the run
-        added is gone and that a new task can write. A host reinstall during the run gives the task a new run ID, so
+        """Restores the temporary checkpoint and ends the task on this VM, then checks that every checkpoint added
+        since checkpoint() is gone (without checkpoint() there is no listing to compare) and that a new task can write. A host reinstall during the run gives the task a new run ID, so
         vm_end_turn no longer owns the run's temp checkpoint; all_temp removes it then. Errors become a failed check."""
         try:
             if self.checkpoint_id:
