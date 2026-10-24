@@ -24,5 +24,4 @@ Run these as described in [Manual verification](docs/manual-verification.md): ch
 
 - [ ] Decide whether to control a session while it stays on enhanced/RDP (guest-side capture and input, or HyperHand as the RDP client). Currently `vm_take_console` returns the session to the console and recovers an existing disconnected viewer in basic mode; concurrent control while retaining enhanced/RDP mode remains unsupported. See [Hyper-V facts 7 to 14](docs/research/hyper-v.md#enhanced-session-and-the-console).
 - [ ] Decide whether unattended first sign-in belongs in scope. Current unlock support requires an already signed-in, locked session with the agent running.
-- [ ] Decide whether UWP/MSIX discovery and launch support is needed beyond current Win32 Start Menu/App Paths discovery.
 - [ ] Decide whether test VM unlock passwords should have at least 4 characters. `vm_evidence` does not redact secrets shorter than 4 characters (they would garble the record); such secrets can appear in exported evidence and are counted in `skipped_short_secrets`.
