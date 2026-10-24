@@ -224,3 +224,25 @@ func TestDiffControlsFallbackPath(t *testing.T) {
 		t.Errorf("renamed: %+v", d)
 	}
 }
+
+func TestControlOmittedChildren(t *testing.T) {
+	n := proto.ControlInfo{Index: 3, Depth: 1, ControlType: 50008, Name: "Files", Enabled: true, RuntimeID: "42.7",
+		Actions: []string{"ScrollDown"}, OmittedChildren: 612}
+	want := `  [3] List "Files" (0,0 0x0) actions=[ScrollDown] omitted_children=612`
+	if got := renderControl(n); got != want {
+		t.Fatalf("rendered %q, want %q", got, want)
+	}
+	cur := n
+	cur.OmittedChildren = 0
+	if strings.Contains(renderControl(cur), "omitted_children") {
+		t.Fatalf("zero omitted children rendered: %s", renderControl(cur))
+	}
+	d := diffControls([]proto.ControlInfo{n}, []proto.ControlInfo{cur})
+	if !reflect.DeepEqual(d.Changed, []string{renderControl(cur)}) || len(d.Added) != 0 || len(d.Removed) != 0 {
+		t.Fatalf("omitted_children change not reported: %+v", d)
+	}
+	cur.OmittedChildren = 612
+	if controlChanged(n, cur) {
+		t.Fatal("equal omitted_children reported as changed")
+	}
+}

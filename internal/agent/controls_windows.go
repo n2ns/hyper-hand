@@ -109,6 +109,7 @@ func validateControlsWindow(a proto.ControlsArgs) error {
 type uiaSession struct {
 	automation, root, walker *ole.IUnknown
 	cache                    *ole.IUnknown
+	scan                     *childScan
 }
 
 func openUIA() (*uiaSession, error) {
@@ -136,7 +137,11 @@ func openUIA() (*uiaSession, error) {
 }
 
 func (s *uiaSession) close() {
-	for _, o := range []*ole.IUnknown{s.cache, s.walker, s.root, s.automation} {
+	objects := []*ole.IUnknown{s.cache, s.walker, s.root, s.automation}
+	if s.scan != nil {
+		objects = append(objects, s.scan.cond, s.scan.light)
+	}
+	for _, o := range objects {
 		if o != nil {
 			o.Release()
 		}
@@ -198,6 +203,10 @@ func collectControlsCached(a proto.ControlsArgs, cached bool) (proto.ControlsRes
 	if err != nil {
 		return proto.ControlsResult{}, err
 	}
+	var window proto.Rect
+	if err := uiaCall(e.element, uiaBounds, uintptr(unsafe.Pointer(&window))); err != nil {
+		return proto.ControlsResult{}, err
+	}
 	if a.RootRuntimeID != "" {
 		if hinted, ok := s.findHintedRuntimeID(e, a, a.RootRuntimeID, a.HintRect); ok {
 			e = hinted
@@ -218,7 +227,10 @@ func collectControlsCached(a proto.ControlsArgs, cached bool) (proto.ControlsRes
 		defer c.release()
 		walkRoot = c
 	}
-	r, err := walkControls(walkRoot, a)
+	if walkRoot.scan, err = s.openChildScan(walkRoot.cache); err != nil {
+		return proto.ControlsResult{}, err
+	}
+	r, err := walkControls(walkRoot, a, window)
 	if err != nil {
 		return proto.ControlsResult{}, err
 	}
@@ -460,6 +472,7 @@ type nativeControl struct {
 	element, walker *ole.IUnknown
 	cache           *ole.IUnknown // borrowed from the session; only this element's properties are cached
 	partial         bool          // only the search selectors are cached
+	scan            *childScan    // borrowed from the session; nil where the child limit does not apply
 }
 
 func (e *nativeControl) release() {
@@ -487,7 +500,7 @@ func (e *nativeControl) relative(slot int) (controlElement, error) {
 	if out == nil {
 		return nil, nil
 	}
-	return &nativeControl{element: out, walker: e.walker, cache: e.cache, partial: e.partial}, nil
+	return &nativeControl{element: out, walker: e.walker, cache: e.cache, partial: e.partial, scan: e.scan}, nil
 }
 func (e *nativeControl) first() (controlElement, error) {
 	return e.relative(uiaFirstChild)

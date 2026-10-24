@@ -98,3 +98,119 @@ func (e *nativeControl) cachedRuntimeID() ([]int32, error) {
 	copy(ids, unsafe.Slice((*int32)(arr.data), len(ids)))
 	return ids, nil
 }
+
+const (
+	uiaControlViewCondition = 18 // IUIAutomation get_ControlViewCondition
+	uiaFindAllBuildCache    = 8  // IUIAutomationElement
+	uiaArrayLength          = 3  // IUIAutomationElementArray
+	uiaArrayGetElement      = 4
+	treeScopeChildren       = 2
+	propBoundingRectangle   = 30001
+)
+
+// childScan lists an element's children for the per-parent child limit: one FindAllBuildCache over the immediate
+// children that satisfy the control-view condition, caching only the rectangle and the offscreen flag. full is the
+// walk's cache request (nil for the uncached walk), applied to the children that are then visited. The session owns
+// cond and light.
+type childScan struct {
+	cond, light, full *ole.IUnknown
+}
+
+func (s *uiaSession) openChildScan(full *ole.IUnknown) (*childScan, error) {
+	c := &childScan{full: full}
+	s.scan = c
+	if err := uiaCall(s.automation, uiaControlViewCondition, uintptr(unsafe.Pointer(&c.cond))); err != nil {
+		return nil, err
+	}
+	if c.cond == nil {
+		return nil, errors.New("UI Automation returned no control-view condition")
+	}
+	if err := uiaCall(s.automation, uiaCreateCacheRequest, uintptr(unsafe.Pointer(&c.light))); err != nil {
+		return nil, err
+	}
+	if c.light == nil {
+		return nil, errors.New("UI Automation returned no cache request")
+	}
+	for _, id := range []int32{propBoundingRectangle, propIsOffscreen} {
+		if err := uiaCall(c.light, uiaCacheAddProperty, uintptr(id)); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
+}
+
+// children lists e's children in one provider call. When the provider fails the call it returns nil, and the walk
+// visits the children through the control-view walker as before, without the child limit.
+func (e *nativeControl) children() (childSet, error) {
+	if e.scan == nil {
+		return nil, nil
+	}
+	var arr *ole.IUnknown
+	if err := uiaCall(e.element, uiaFindAllBuildCache, treeScopeChildren, uintptr(unsafe.Pointer(e.scan.cond)), uintptr(unsafe.Pointer(e.scan.light)), uintptr(unsafe.Pointer(&arr))); err != nil || arr == nil {
+		return nil, nil
+	}
+	var n int32
+	if err := uiaCall(arr, uiaArrayLength, uintptr(unsafe.Pointer(&n))); err != nil {
+		arr.Release()
+		return nil, nil
+	}
+	return &nativeChildren{array: arr, n: int(n), parent: e}, nil
+}
+
+type nativeChildren struct {
+	array  *ole.IUnknown
+	n      int
+	parent *nativeControl
+}
+
+func (c *nativeChildren) len() int { return c.n }
+func (c *nativeChildren) release() { c.array.Release() }
+
+func (c *nativeChildren) element(i int) (*ole.IUnknown, error) {
+	var el *ole.IUnknown
+	if err := uiaCall(c.array, uiaArrayGetElement, uintptr(i), uintptr(unsafe.Pointer(&el))); err != nil {
+		return nil, err
+	}
+	if el == nil {
+		return nil, errors.New("UI Automation returned no child element")
+	}
+	return el, nil
+}
+
+// bounds reads the cached rectangle and offscreen flag of child i.
+func (c *nativeChildren) bounds(i int) (proto.Rect, bool, error) {
+	var r proto.Rect
+	el, err := c.element(i)
+	if err != nil {
+		return r, false, err
+	}
+	defer el.Release()
+	e := nativeControl{element: el, cache: c.parent.scan.light}
+	if err := uiaCall(el, e.slot(uiaBounds), uintptr(unsafe.Pointer(&r))); err != nil {
+		return r, false, err
+	}
+	off, err := e.integer(uiaOffscreen)
+	return r, off != 0, err
+}
+
+// load returns child i with the walk's cache request applied, like the walker's navigation does.
+func (c *nativeChildren) load(i int) (controlElement, error) {
+	el, err := c.element(i)
+	if err != nil {
+		return nil, err
+	}
+	p := c.parent
+	if p.scan.full == nil {
+		return &nativeControl{element: el, walker: p.walker, scan: p.scan}, nil
+	}
+	var out *ole.IUnknown
+	err = uiaCall(el, uiaBuildUpdatedCache, uintptr(unsafe.Pointer(p.scan.full)), uintptr(unsafe.Pointer(&out)))
+	el.Release()
+	if err != nil {
+		return nil, err
+	}
+	if out == nil {
+		return nil, errors.New("UI Automation returned no cached element")
+	}
+	return &nativeControl{element: out, walker: p.walker, cache: p.scan.full, scan: p.scan}, nil
+}

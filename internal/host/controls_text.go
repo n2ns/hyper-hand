@@ -16,7 +16,8 @@ import (
 //	[12] Edit "" id=cmdline (0,980 1920x60) focused value="LINE"
 //
 // Index, control type name, quoted name, id=<automation_id> (only when set), (x,y wxh) of the rect, then the state
-// words disabled, offscreen and focused, value="...", executable actions and readable semantic state.
+// words disabled, offscreen and focused, value="...", executable actions, readable semantic state and
+// omitted_children=N when the per-parent child limit left N children out.
 func renderControl(n proto.ControlInfo) string {
 	var b strings.Builder
 	b.WriteString(strings.Repeat("  ", max(0, n.Depth)))
@@ -48,6 +49,9 @@ func renderControl(n proto.ControlInfo) string {
 	if n.State != nil {
 		state, _ := json.Marshal(n.State)
 		fmt.Fprintf(&b, " state=%s", state)
+	}
+	if n.OmittedChildren > 0 {
+		fmt.Fprintf(&b, " omitted_children=%d", n.OmittedChildren)
 	}
 	return b.String()
 }
@@ -123,7 +127,7 @@ func controlKeys(nodes []proto.ControlInfo) []string {
 // its index: the caller must learn the new index before acting on the element in the new observation.
 func controlChanged(a, b proto.ControlInfo) bool {
 	return a.Index != b.Index || a.Name != b.Name || a.Rect != b.Rect || a.Enabled != b.Enabled || a.Offscreen != b.Offscreen ||
-		a.HasValue != b.HasValue || a.Value != b.Value || a.Focused != b.Focused ||
+		a.HasValue != b.HasValue || a.Value != b.Value || a.Focused != b.Focused || a.OmittedChildren != b.OmittedChildren ||
 		!slices.Equal(controlActions(a), controlActions(b)) || !reflect.DeepEqual(a.State, b.State)
 }
 
