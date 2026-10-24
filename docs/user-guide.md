@@ -12,9 +12,15 @@ HyperHand consists of a tray program and a Windows service on the host, and a sm
 
 ## 1. Download
 
-Download `hyperhand-X.Y.Z-windows-amd64.zip` from [Releases](https://github.com/n2ns/hyper-hand/releases). It contains `hyperhand.exe`, `hyperhand-agent.exe` (both Windows amd64, with the version stamped in), `README.md` and `CHANGELOG.md`. Extract both executables to the same folder. The installer copies them to `%ProgramFiles%\HyperHand`; the logon task uses that installed copy.
+Download from [Releases](https://github.com/n2ns/hyper-hand/releases):
 
-Releases newer than 0.5.0 also offer `hyperhand-X.Y.Z-windows-amd64.exe`, a single executable with the agent built in: run it with `install` instead of extracting the zip (`.\hyperhand-X.Y.Z-windows-amd64.exe install`).
+| Package | How to install |
+| --- | --- |
+| `hyperhand-X.Y.Z-windows-amd64-setup.exe` (recommended) | Double-click and follow the installation wizard. |
+| `hyperhand-X.Y.Z-windows-amd64.exe` | Run `.\hyperhand-X.Y.Z-windows-amd64.exe install` in PowerShell. Double-clicking this command-line package starts the tray, not setup. |
+| `hyperhand-X.Y.Z-windows-amd64.zip` | Extract both executables together and run `.\hyperhand.exe install`. The archive also contains `README.md` and `CHANGELOG.md`. |
+
+All three install the same host and agent executables to `%ProgramFiles%\HyperHand`. The wizard and single-file command-line package contain the guest agent; no separate download is needed. The ZIP is not a portable installation.
 
 To build from source instead, see [Building HyperHand](building.md#build).
 
@@ -22,13 +28,15 @@ When installing or updating from the zip, keep `hyperhand-agent.exe` in the same
 
 ## 2. Install the host service and tray
 
-From the folder with `hyperhand.exe` (`build` for a source build):
+Open the setup wizard as the user who will run HyperHand and click **Install**. Windows asks for administrator approval when installation starts. The wizard waits for installation to finish and reports a failure instead of showing success when approval is cancelled or setup fails. Updates must be run from the original installing user's session.
+
+For the ZIP or a source build, run this from the folder containing `hyperhand.exe`:
 
 ```
 hyperhand.exe install
 ```
 
-This shows one UAC prompt, then:
+Either method requests elevation if needed, then:
 
 1. Copies both executables to `%ProgramFiles%\HyperHand` and records the installing user's SID in `%ProgramData%\HyperHand\config.json`.
 2. Installs the automatic Windows service `HyperHandService`, running as `NT SERVICE\HyperHandService`. Only this dedicated account is added to Hyper-V Administrators. It does not add your user account or run the service as LocalSystem.
@@ -39,6 +47,14 @@ This shows one UAC prompt, then:
 7. Starts the service and ordinary tray.
 
 Run `install` again from a new release or build to update the installed copies. Keep the service installation separate from normal tray startup: launching the installed executable without `install` does not request UAC or change machine configuration.
+
+For unattended installation, the wizard accepts the standard Inno Setup switches:
+
+```powershell
+.\hyperhand-X.Y.Z-windows-amd64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+```
+
+These suppress the wizard and its messages, not Windows administrator approval. The process exits with a nonzero code if installation fails. Uninstall remains available through the single HyperHand entry in Windows Settings > Apps; the wizard does not add another uninstaller.
 
 Only one tray instance runs at a time. Its connection to the service uses a local named pipe restricted to the configured owner, SYSTEM, administrators and the service account. This does not add authentication to the local MCP HTTP endpoint.
 
@@ -166,7 +182,7 @@ Where UAC prompts appear, and where they do not:
 
 | When | Where | Prompt |
 |---|---|---|
-| `hyperhand.exe install` (including updates) | Host | Once per install/update, for the service, protected files and logon task. |
+| Setup wizard or `hyperhand.exe install` (including updates) | Host | Once per install/update if not already elevated, for the service, protected files and logon task. |
 | `hyperhand.exe uninstall` | Host | Once; it relaunches itself elevated. |
 | Starting the installed `hyperhand.exe`, at logon or by hand | Host | None. The tray runs as the ordinary user. |
 | Restarting from the tray menu | Host | None. Only the tray/MCP process restarts; active requests are interrupted. |
@@ -190,8 +206,8 @@ The examples in [docs/hooks/](hooks/) call `vm_end_turn` without arguments, so w
 
 ### From a release
 
-1. Download the new zip from [Releases](https://github.com/n2ns/hyper-hand/releases) and extract both executables together.
-2. Finish active VM tool requests, then run the extracted `hyperhand.exe install` and approve UAC. The installer updates the protected installation and restarts the host components. Existing highest-privilege tray tasks are migrated to the ordinary logon task.
+1. Download the new setup wizard from [Releases](https://github.com/n2ns/hyper-hand/releases).
+2. Finish active VM tool requests, then run the wizard as the original installing user and approve UAC. It updates the existing installation, including one originally installed from the ZIP or command-line EXE, and restarts the host components. The startup preference is preserved. Alternatively, extract the new ZIP's executables together and run `hyperhand.exe install`.
 3. Reconnect the MCP client after the tray returns.
 4. Ask the AI to call `vm_update_agent` for each VM. It sends the installed `hyperhand-agent.exe` to the running agent, which replaces itself and restarts. Until then, tools refuse an agent that speaks an older protocol with `agent_outdated`.
 

@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-10-25
+
+### Added
+
+- An Inno Setup wizard, `hyperhand-X.Y.Z-windows-amd64-setup.exe`, for double-click installation and updates. It reuses the existing installer, preserves the installing user's identity across UAC, waits for the actual installation result, supports silent installation and retains a single Windows Apps and Features entry. The command-line EXE and ZIP remain available.
+
 ## [0.6.0] - 2026-10-24
 
 ### Added

@@ -23,6 +23,10 @@ After a new viewer connects, the helper raises and activates its window; manual 
 
 ### 9.2 install
 
+`hyperhand-X.Y.Z-windows-amd64-setup.exe` is the Inno Setup wizard. It extracts the release's embedded-agent host executable into a temporary directory and runs `install --wizard`, waiting for completion. It does not pre-create the protected installation directory or register its own uninstaller; the Go installer below owns files, services, tasks and the single Apps and Features entry. The wizard supports Inno Setup's silent switches and reports a nonzero exit code on failure.
+
+`install --wizard` is an internal, dialog-free entry point. It captures the calling user's identity before elevation and waits for the elevated `install --quiet` worker to exit. The worker uses a distinct temporary executable, so stopping an old source tray cannot terminate the waiting caller. An already elevated caller installs directly. UAC cancellation and worker failure fail the wizard; `--quiet` alone still requires an elevated process. The wizard does not add transaction rollback or update guest agents.
+
 `hyperhand.exe install` installs or updates the host service and ordinary tray. Installation and uninstallation run in the elevated `hyperhand.exe` itself, through the Windows service control manager, Task Scheduler, local group and security APIs; no script is run.
 
 - If not elevated, it relaunches itself elevated with `install`.

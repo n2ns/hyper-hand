@@ -34,6 +34,12 @@ func install(args []string) (bool, error) {
 }
 
 func installWithElevation(args []string, elevated bool) (bool, error) {
+	if len(args) > 0 && args[0] == "--wizard" {
+		if len(args) != 1 {
+			return true, errors.New("install --wizard does not accept other arguments")
+		}
+		return true, installWizard(elevated)
+	}
 	quiet, ownerArgs, err := parseInstallArgs(args)
 	if err != nil {
 		return quiet, err

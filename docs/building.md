@@ -22,6 +22,20 @@ GOOS=windows go build -ldflags "-H windowsgui" -o build/hyperhand-agent.exe ./cm
 
 Keep `hyperhand-agent.exe` in the same directory as `hyperhand.exe` when installing or updating. Guest installation and update use the installed agent executable.
 
+### Setup wizard
+
+The release workflow builds the embedded-agent `dist/hyperhand.exe` first (see [Releasing](#releasing)). With that payload and Inno Setup 6.3 or later installed, compile the wizard on Windows from the repository root:
+
+```powershell
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.6.1 installer/hyperhand.iss
+```
+
+Use the actual candidate version both here and in the payload's `proto.Version`. The output is `build/installer/hyperhand-0.6.1-windows-amd64-setup.exe`. `/DPayloadDir=<absolute directory>` selects a different directory containing the embedded-agent `hyperhand.exe`; `/O<directory>` selects the output directory. A per-user Inno installation may put `ISCC.exe` under `%LOCALAPPDATA%\Programs\Inno Setup 6` instead.
+
+The wizard only extracts a temporary payload and waits for the Go installer. It does not own installed files or a second uninstall entry. Keep the wrapper unelevated: `install --wizard` captures the original user before requesting elevation, whereas elevating the wrapper with another account would select that account. Normal install, development install and uninstall retain their existing Go implementations.
+
+For a WinGet submission, use the wizard's stable release URL and SHA-256, `InstallerType: inno`, `Scope: machine`, `ElevationRequirement: elevatesSelf`, and match the existing Apps and Features entry (`DisplayName: HyperHand`, `Publisher: n2ns`, product code `HyperHand`). The uninstall command comes from that entry. Creating the installer does not publish a WinGet manifest; validate installation, upgrade detection and uninstall with WinGet before submitting one.
+
 ## Test
 
 ```
@@ -32,6 +46,8 @@ python3 -m unittest discover -s client
 `scripts/test-windows.sh` runs `go vet ./cmd/... ./internal/...` for Windows, cross-compiles the race-enabled test executable of every package into `%TEMP%\hyperhand-tests` on the host and runs each there (a test executable started from the WSL path gets Linux paths for itself and its working directory, and some tests fail). It prints `ok` or `FAIL` per package, keeps each package's output in a `.log` beside the executables, and exits nonzero on any failure. Extra arguments go to every test executable, for example `-test.run=TestStageBuild` or `-test.v`. `HH_TEST_NAME` names the directory under `%TEMP%` instead (letters, digits, `.`, `_`, `-`; not `.` or `..`); the script deletes it first, so runs from several worktrees at once need different names. The `windows-test` skill is the procedure.
 
 The tracked `build/go.mod` makes the otherwise ignored `build/` directory a separate module, so the old Go experiments and evidence kept there stay out of package discovery. Keep that file. Three agent tests that hit-test or read UI Automation focus on the host desktop (`TestWindowAt`, `TestFocusedHelper`, `TestControlHintNativeIdentityAndFallback`) are skipped while the host session is locked: Windows lets no program unlock it. Run them on an unlocked desktop (`-test.v` lists skips).
+
+`scripts/test-setup.ps1` compiles the real Inno script with a harmless test payload and checks silent success, failure and completion waiting on Windows. It does not install HyperHand or change the host service. The release workflow runs it before building release payloads. Actual installation acceptance, including UAC and upgrades from older packages, is separate; see [Manual verification](manual-verification.md#release-package).
 
 ## Install a development build
 
@@ -66,4 +82,10 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Pushing a `vX.Y.Z` tag runs a GitHub Actions workflow that runs the tests, builds `hyperhand-agent.exe` and then `hyperhand.exe` for Windows amd64 with the version stamped in, and publishes a GitHub Release with `hyperhand-X.Y.Z-windows-amd64.zip` (both exes, `README.md` and `CHANGELOG.md`) and `hyperhand-X.Y.Z-windows-amd64.exe`. The agent is copied into `cmd/hyperhand/embedded/` before `hyperhand.exe` is built, which embeds it, so that single executable installs both (`install` prefers an agent beside it, as in the zip and development installs). The release notes are the version's section of `CHANGELOG.md`.
+Pushing a `vX.Y.Z` tag runs a GitHub Actions workflow that runs the tests, builds `hyperhand-agent.exe` and then `hyperhand.exe` for Windows amd64 with the version stamped in, and compiles the Inno Setup wizard. It publishes three GitHub Release assets:
+
+- `hyperhand-X.Y.Z-windows-amd64-setup.exe`: the recommended double-click wizard.
+- `hyperhand-X.Y.Z-windows-amd64.exe`: the command-line single-file package; run with `install`.
+- `hyperhand-X.Y.Z-windows-amd64.zip`: both executables, `README.md` and `CHANGELOG.md`.
+
+The agent is copied into `cmd/hyperhand/embedded/` before `hyperhand.exe` is built, which embeds it, so the single executable and wizard install both (`install` prefers an agent beside it, as in the ZIP and development installs). The release notes are the version's section of `CHANGELOG.md`.

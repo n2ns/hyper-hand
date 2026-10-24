@@ -32,13 +32,7 @@ Administrator approval is required to install, update or uninstall HyperHand on 
 
 ## Quick start
 
-1. **Install HyperHand on the host.** Download `hyperhand-X.Y.Z-windows-amd64.zip` from the [latest release](https://github.com/n2ns/hyper-hand/releases/latest), extract both executables to the same folder and open PowerShell in that folder:
-
-   ```powershell
-   .\hyperhand.exe install
-   ```
-
-   Approve the UAC prompt once. HyperHand installs to `%ProgramFiles%\HyperHand`, and its tray icon appears.
+1. **Install HyperHand on the host.** Download `hyperhand-X.Y.Z-windows-amd64-setup.exe` from the [latest release](https://github.com/n2ns/hyper-hand/releases/latest), double-click it and follow the wizard. Approve the UAC prompt when installing. HyperHand installs to `%ProgramFiles%\HyperHand`, and its tray icon appears. The [user guide](docs/user-guide.md#1-download) also covers the command-line EXE and ZIP packages.
 
 2. **Connect your AI client.** Run the command for your client:
 
