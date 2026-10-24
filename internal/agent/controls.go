@@ -269,7 +269,38 @@ type controlElement interface {
 	release()
 }
 
-func walkControls(root controlElement, a proto.ControlsArgs) (proto.ControlsResult, error) {
+// Per-parent child limit of list_controls and list_control_subtree: a parent with more than childLimitAll children
+// has only its visible children visited, one with at least childLimitNone none; the rest count as OmittedChildren.
+const (
+	childLimitAll  = 100
+	childLimitNone = 500
+)
+
+// childLister is implemented by elements that can list their control-view children in one provider call with just
+// the properties the child limit needs. children returns nil when the list is unavailable; the walk then visits the
+// children through first and next without the limit.
+type childLister interface {
+	children() (childSet, error)
+}
+
+// childSet is a listed set of children. bounds reads child i's rectangle and offscreen flag from the listing; load
+// returns child i as a fully readable element, which the caller releases.
+type childSet interface {
+	len() int
+	bounds(i int) (proto.Rect, bool, error)
+	load(i int) (controlElement, error)
+	release()
+}
+
+// rectsIntersect reports whether two rectangles share an area; an empty rectangle intersects nothing.
+func rectsIntersect(a, b proto.Rect) bool {
+	return a.Left < a.Right && a.Top < a.Bottom && a.Left < b.Right && b.Left < a.Right && a.Top < b.Bottom && b.Top < a.Bottom
+}
+
+// walkControls reads the control tree under root depth first within a's limits. window is the rectangle of the
+// observed window: a parent with more than childLimitAll children has only children that are not offscreen and
+// intersect it visited.
+func walkControls(root controlElement, a proto.ControlsArgs, window proto.Rect) (proto.ControlsResult, error) {
 	r := proto.ControlsResult{Nodes: []proto.ControlInfo{}, Focused: -1}
 	truncate := func(reason string) {
 		r.Truncated = true
@@ -278,6 +309,44 @@ func walkControls(root controlElement, a proto.ControlsArgs) (proto.ControlsResu
 		}
 	}
 	var visit func(controlElement, int, int) error
+	// visitLimited applies the per-parent child limit to the listed children of the node at index parent.
+	visitLimited := func(set childSet, parent, depth int) error {
+		count := set.len()
+		if count >= childLimitNone {
+			r.Nodes[parent].OmittedChildren = count
+			truncate("child_limit")
+			return nil
+		}
+		omitted := 0
+		for i := 0; i < count; i++ {
+			rect, offscreen, err := set.bounds(i)
+			if err != nil {
+				return err
+			}
+			if offscreen || !rectsIntersect(rect, window) {
+				omitted++
+				continue
+			}
+			if len(r.Nodes) == a.MaxNodes {
+				truncate("max_nodes")
+				continue // keep counting the children the limit leaves out
+			}
+			child, err := set.load(i)
+			if err != nil {
+				return err
+			}
+			err = visit(child, parent, depth+1)
+			child.release()
+			if err != nil {
+				return err
+			}
+		}
+		if omitted > 0 {
+			r.Nodes[parent].OmittedChildren = omitted
+			truncate("child_limit")
+		}
+		return nil
+	}
 	visit = func(e controlElement, parent, depth int) error {
 		n, password, textCut, err := e.info()
 		if err != nil {
@@ -306,6 +375,26 @@ func walkControls(root controlElement, a proto.ControlsArgs) (proto.ControlsResu
 			child.release()
 			truncate("max_depth")
 			return nil
+		}
+		if len(r.Nodes) == a.MaxNodes {
+			child.release()
+			truncate("max_nodes")
+			return nil
+		}
+		if lister, ok := e.(childLister); ok {
+			set, err := lister.children()
+			if err != nil {
+				child.release()
+				return err
+			}
+			if set != nil {
+				if set.len() > childLimitAll {
+					child.release()
+					defer set.release()
+					return visitLimited(set, n.Index, depth)
+				}
+				set.release()
+			}
 		}
 		for child != nil {
 			if len(r.Nodes) == a.MaxNodes {

@@ -64,6 +64,193 @@ func (e *fakeControl) next() (controlElement, error) {
 }
 func (e *fakeControl) release() { e.releases++ }
 
+// fakeListed is a parent whose children are also listed for the per-parent child limit, each with a rectangle and an
+// offscreen flag; first and next walk the same children.
+type fakeListed struct {
+	fakeControl
+	set *fakeChildren
+}
+
+func (e *fakeListed) children() (childSet, error) {
+	e.set.listCalls++
+	return e.set, nil
+}
+
+type fakeChildren struct {
+	kids                    []*fakeControl
+	rects                   []proto.Rect
+	offscreen               []bool
+	listCalls, listReleases int
+	boundsCalls, loadCalls  int
+}
+
+func (c *fakeChildren) len() int { return len(c.kids) }
+func (c *fakeChildren) bounds(i int) (proto.Rect, bool, error) {
+	c.boundsCalls++
+	return c.rects[i], c.offscreen[i], nil
+}
+func (c *fakeChildren) load(i int) (controlElement, error) {
+	c.loadCalls++
+	return c.kids[i], nil
+}
+func (c *fakeChildren) release() { c.listReleases++ }
+
+var (
+	fakeWindow    = proto.Rect{Left: 0, Top: 0, Right: 1000, Bottom: 800}
+	fakeInside    = proto.Rect{Left: 10, Top: 10, Right: 60, Bottom: 30}
+	fakeOutside   = proto.Rect{Left: 10, Top: 900, Right: 60, Bottom: 920}
+	fakeTouching  = proto.Rect{Left: 1000, Top: 10, Right: 1050, Bottom: 30} // shares only an edge
+	fakeStraddles = proto.Rect{Left: 990, Top: 790, Right: 1050, Bottom: 850}
+)
+
+// listedParent builds a parent with n children; rect and offscreen give each child's listed bounds.
+func listedParent(n int, rect func(int) proto.Rect, offscreen func(int) bool) *fakeListed {
+	c := &fakeChildren{}
+	for i := 0; i < n; i++ {
+		c.kids = append(c.kids, &fakeControl{name: fmt.Sprint("item ", i)})
+		c.rects = append(c.rects, rect(i))
+		c.offscreen = append(c.offscreen, offscreen(i))
+		if i > 0 {
+			c.kids[i-1].sibling = c.kids[i]
+		}
+	}
+	p := &fakeListed{fakeControl: fakeControl{name: "list"}, set: c}
+	if n > 0 {
+		p.child = c.kids[0]
+	}
+	return p
+}
+
+func TestControlsChildLimit(t *testing.T) {
+	// Every tenth child is visible; the others alternate between outside the window and offscreen inside it.
+	sparse := func(i int) proto.Rect {
+		if i%10 == 0 || i%2 == 1 {
+			return fakeInside
+		}
+		return fakeOutside
+	}
+	sparseOff := func(i int) bool { return i%10 != 0 && i%2 == 1 }
+	visibleCount := func(n int) int { return (n + 9) / 10 }
+	none := func(int) bool { return false }
+	for _, tc := range []struct {
+		name    string
+		n       int
+		rect    func(int) proto.Rect
+		off     func(int) bool
+		visited int
+		omitted int
+	}{
+		{"100 all visited", 100, func(int) proto.Rect { return fakeOutside }, func(int) bool { return true }, 100, 0},
+		{"101 visible only", 101, sparse, sparseOff, visibleCount(101), 101 - visibleCount(101)},
+		{"101 all visible", 101, func(int) proto.Rect { return fakeStraddles }, none, 101, 0},
+		{"edge contact is not visible", 101, func(i int) proto.Rect {
+			if i == 0 {
+				return fakeInside
+			}
+			return fakeTouching
+		}, none, 1, 100},
+		{"499 visible only", 499, sparse, sparseOff, visibleCount(499), 499 - visibleCount(499)},
+		{"500 none", 500, func(int) proto.Rect { return fakeInside }, none, 0, 500},
+		{"5000 none", 5000, func(int) proto.Rect { return fakeInside }, none, 0, 5000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			list := listedParent(tc.n, tc.rect, tc.off)
+			r, err := walkControls(&fakeTopLevel{fakeControl: &fakeControl{name: "root"}, only: list}, proto.ControlsArgs{MaxDepth: 4, MaxNodes: 1000}, fakeWindow)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := len(r.Nodes) - 2; got != tc.visited {
+				t.Fatalf("visited %d children, want %d", got, tc.visited)
+			}
+			if got := r.Nodes[1].OmittedChildren; got != tc.omitted {
+				t.Fatalf("omitted_children %d, want %d", got, tc.omitted)
+			}
+			if r.Nodes[0].OmittedChildren != 0 {
+				t.Errorf("root omitted %d", r.Nodes[0].OmittedChildren)
+			}
+			limited := slices.Contains(r.Truncation, "child_limit")
+			if limited != (tc.omitted > 0) || r.Truncated != (tc.omitted > 0) {
+				t.Errorf("truncation %v %v with %d omitted", r.Truncated, r.Truncation, tc.omitted)
+			}
+			for _, n := range r.Nodes[2:] {
+				if n.Parent != 1 || n.Depth != 2 {
+					t.Fatalf("child placement: %+v", n)
+				}
+				var i int
+				fmt.Sscanf(n.Name, "item %d", &i)
+				if tc.n > childLimitAll && (tc.off(i) || !rectsIntersect(tc.rect(i), fakeWindow)) {
+					t.Fatalf("invisible child %d visited", i)
+				}
+			}
+			if tc.n >= childLimitNone && (list.set.boundsCalls != 0 || list.set.loadCalls != 0) {
+				t.Errorf("read %d bounds and loaded %d children of a %d-child parent", list.set.boundsCalls, list.set.loadCalls, tc.n)
+			}
+			if list.set.listCalls != 1 || list.set.listReleases != 1 {
+				t.Errorf("listing calls %d releases %d", list.set.listCalls, list.set.listReleases)
+			}
+			for i, kid := range list.set.kids {
+				want := kid.reads
+				if i == 0 && tc.n > childLimitAll {
+					want++ // the walker's first child, released when the listing takes over
+				}
+				if kid.reads > 1 || kid.releases != want {
+					t.Fatalf("child %d read %d released %d", i, kid.reads, kid.releases)
+				}
+			}
+		})
+	}
+}
+
+// fakeTopLevel is a root with exactly one child, the listed parent under test.
+type fakeTopLevel struct {
+	*fakeControl
+	only *fakeListed
+}
+
+func (e *fakeTopLevel) first() (controlElement, error) { return e.only, nil }
+
+func TestControlsChildLimitWithOtherLimits(t *testing.T) {
+	// 200 children, the first 50 visible, each visible child with one grandchild.
+	list := listedParent(200, func(i int) proto.Rect {
+		if i < 50 {
+			return fakeInside
+		}
+		return fakeOutside
+	}, func(int) bool { return false })
+	for i := 0; i < 50; i++ {
+		list.set.kids[i].child = &fakeControl{name: "grandchild"}
+	}
+	r, err := walkControls(&fakeTopLevel{fakeControl: &fakeControl{name: "root"}, only: list}, proto.ControlsArgs{MaxDepth: 4, MaxNodes: 10}, fakeWindow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Nodes) != 10 || !slices.Contains(r.Truncation, "max_nodes") || !slices.Contains(r.Truncation, "child_limit") {
+		t.Fatalf("nodes %d truncation %v", len(r.Nodes), r.Truncation)
+	}
+	if r.Nodes[1].OmittedChildren != 150 {
+		t.Errorf("omitted_children %d, want the 150 invisible children", r.Nodes[1].OmittedChildren)
+	}
+	if r.Nodes[3].Name != "grandchild" || r.Nodes[3].Depth != 3 {
+		t.Errorf("visible child's subtree not walked: %+v", r.Nodes[3])
+	}
+	if list.set.loadCalls != 4 {
+		t.Errorf("loaded %d children after the node limit", list.set.loadCalls)
+	}
+
+	// A parent at max_depth is not listed.
+	list = listedParent(600, func(int) proto.Rect { return fakeInside }, func(int) bool { return false })
+	r, err = walkControls(&fakeTopLevel{fakeControl: &fakeControl{name: "root"}, only: list}, proto.ControlsArgs{MaxDepth: 1, MaxNodes: 1000}, fakeWindow)
+	if err != nil || list.set.listCalls != 0 || r.Nodes[1].OmittedChildren != 0 || !slices.Equal(r.Truncation, []string{"max_depth"}) {
+		t.Fatalf("max_depth: listed %d %+v %v", list.set.listCalls, r, err)
+	}
+	// Nor is a parent reached with the node budget spent.
+	list = listedParent(600, func(int) proto.Rect { return fakeInside }, func(int) bool { return false })
+	r, err = walkControls(&fakeTopLevel{fakeControl: &fakeControl{name: "root"}, only: list}, proto.ControlsArgs{MaxDepth: 4, MaxNodes: 2}, fakeWindow)
+	if err != nil || list.set.listCalls != 0 || r.Nodes[1].OmittedChildren != 0 || !slices.Equal(r.Truncation, []string{"max_nodes"}) {
+		t.Fatalf("max_nodes: listed %d %+v %v", list.set.listCalls, r, err)
+	}
+}
+
 func TestControlsTraversal(t *testing.T) {
 	for _, mode := range []string{"full", "max_depth", "max_nodes", "password_subtree", "text_length", "error"} {
 		t.Run(mode, func(t *testing.T) {
@@ -84,7 +271,7 @@ func TestControlsTraversal(t *testing.T) {
 			case "error":
 				first.err = errors.New("provider disappeared")
 			}
-			r, err := walkControls(root, a)
+			r, err := walkControls(root, a, proto.Rect{})
 			if mode == "error" {
 				if !errors.Is(err, first.err) || first.releases != 1 {
 					t.Fatalf("%+v %v", r, err)
@@ -347,6 +534,59 @@ func TestControlsNativeListItemSelect(t *testing.T) {
 	}
 }
 
+// A native list box with many items gets the per-parent child limit in the cached and the uncached walk. The test
+// window lies off every monitor, so UIA reports its items offscreen and a 101-499-item list has items omitted.
+func TestControlsNativeChildLimit(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	send := user32.NewProc("SendMessageW")
+	for _, items := range []int{150, 600} {
+		h := offscreenWindow(t, fmt.Sprint("hyperhand-child-limit-", items), 0, -30000)
+		class, _ := windows.UTF16PtrFromString("LISTBOX")
+		list, _, err := pCreateWindowExW.Call(0, uintptr(unsafe.Pointer(class)), 0, 0x40000000|0x10000000, 10, 10, 200, 100, uintptr(h), 0, 0, 0)
+		if list == 0 {
+			t.Fatal(err)
+		}
+		for i := 0; i < items; i++ {
+			text, _ := windows.UTF16PtrFromString(fmt.Sprint("item ", i))
+			send.Call(list, 0x0180, 0, uintptr(unsafe.Pointer(text))) // LB_ADDSTRING
+		}
+		a := proto.ControlsArgs{Handle: uint64(h), PID: uint32(os.Getpid()), MaxDepth: 3, MaxNodes: 1000}
+		for _, mode := range []string{"serve", "serve_uncached"} {
+			reply, err := pumpControlsHelper(t, helperRequest{Controls: &a}, mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			r := reply.Controls
+			box := -1
+			for i, n := range r.Nodes {
+				if n.ControlType == 50008 { // List
+					box = i
+				}
+			}
+			if box < 0 {
+				t.Fatalf("%d/%s: no list: %+v", items, mode, r.Nodes)
+			}
+			visited := 0
+			for _, n := range r.Nodes {
+				if n.Parent == box {
+					visited++
+				}
+			}
+			omitted := r.Nodes[box].OmittedChildren
+			if !slices.Contains(r.Truncation, "child_limit") || !r.Truncated {
+				t.Errorf("%d/%s: truncation %v", items, mode, r.Truncation)
+			}
+			if items >= childLimitNone && (visited != 0 || omitted < items) {
+				t.Errorf("%d/%s: visited %d omitted %d", items, mode, visited, omitted)
+			}
+			if items < childLimitNone && (omitted == 0 || visited+omitted < items || visited+omitted >= childLimitNone) {
+				t.Errorf("%d/%s: visited %d omitted %d", items, mode, visited, omitted)
+			}
+		}
+	}
+}
+
 // The focused-element helper answers within its budget; what has focus on the test machine is not under our control.
 func TestFocusedHelper(t *testing.T) {
 	requireUnlockedDesktop(t)
@@ -431,11 +671,11 @@ func TestWalkControlsFocused(t *testing.T) {
 	leaf := &fakeControl{name: "leaf", focused: true}
 	first := &fakeControl{name: "first", child: leaf, sibling: &fakeControl{name: "second", focused: true}}
 	root := &fakeControl{name: "root", child: first}
-	r, err := walkControls(root, proto.ControlsArgs{MaxDepth: 4, MaxNodes: 200})
+	r, err := walkControls(root, proto.ControlsArgs{MaxDepth: 4, MaxNodes: 200}, proto.Rect{})
 	if err != nil || r.Focused != 2 || !r.Nodes[2].Focused {
 		t.Fatalf("%+v %v", r, err)
 	}
-	r, err = walkControls(&fakeControl{name: "alone"}, proto.ControlsArgs{MaxDepth: 4, MaxNodes: 200})
+	r, err = walkControls(&fakeControl{name: "alone"}, proto.ControlsArgs{MaxDepth: 4, MaxNodes: 200}, proto.Rect{})
 	if err != nil || r.Focused != -1 {
 		t.Fatalf("%+v %v", r, err)
 	}
