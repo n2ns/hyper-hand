@@ -24,7 +24,7 @@ The criteria are in [Manual verification](../../../docs/manual-verification.md):
 
 ## 3. Clean up
 
-1. `run.cleanup()` restores the checkpoint and calls `vm_end_turn`; when the host was reinstalled during the run (a new run ID no longer owns the temp checkpoint) it removes it with `all_temp: true`. It checks that `errors` and `skipped` are empty, that no checkpoint the run added is left and that a new task can write (ownership was released, with a probe that does not keep ownership itself). A failing call becomes a failed `cleanup` check instead of an exception. Without a runner, `Run(vm, item).cleanup()` restores the checkpoint of a crashed run on that VM; on a later day pass the run's date (`Run(vm, item, day="yyyymmdd")`), since the evidence directory is dated.
+1. `run.cleanup()` restores the checkpoint and calls `vm_end_turn`; when the host was reinstalled during the run (a new run ID no longer owns the temp checkpoint) it removes it with `all_temp: true`. It checks that `errors` and `skipped` are empty, that no checkpoint added since `run.checkpoint()` is left (without `run.checkpoint()` there is no listing to compare, so take checkpoints only through it) and that a new task can write (ownership was released, with a probe that does not keep ownership itself). A failing call becomes a failed `cleanup` check instead of an exception. Without a runner, `Run(vm, item).cleanup()` restores the checkpoint of a crashed run on that VM; on a later day pass the run's date (`Run(vm, item, day="yyyymmdd")`), since the evidence directory is dated.
 2. `hh vm_doctor` is all `ok` and the agent's hash is unchanged; a restored checkpoint can hold an older agent, so update it again (`dev-install` skill, step 2) when it does.
 
 ## 4. Record the outcome
