@@ -177,6 +177,7 @@ func focusWindow(_ context.Context, args json.RawMessage, _ []byte) (any, []byte
 	}
 	runtime.LockOSThread() // AttachThreadInput is per thread
 	defer runtime.UnlockOSThread()
+	dismissed := dismissShellOverlay(found)
 	if r, _, _ := pIsIconic.Call(uintptr(found)); r != 0 {
 		pShowWindow.Call(uintptr(found), swRestore)
 	}
@@ -196,9 +197,53 @@ func focusWindow(_ context.Context, args json.RawMessage, _ []byte) (any, []byte
 		pSetForegroundWindow.Call(uintptr(found))
 	}
 	if windows.GetForegroundWindow() != found {
+		if dismissed != "" {
+			return nil, nil, fmt.Errorf("could not bring %q to the foreground (Esc closed the shell flyout %s first)", title, dismissed)
+		}
 		return nil, nil, fmt.Errorf("could not bring %q to the foreground", title)
 	}
-	return proto.FocusResult{Text: title, Handle: uint64(found)}, nil, nil
+	return proto.FocusResult{Text: title, Handle: uint64(found), Dismissed: dismissed}, nil, nil
+}
+
+// shellFlyoutProcesses are the image names (lower case) of the shell processes whose foreground windows are flyouts
+// that close on Esc: Start, search, action center and notification flyouts, the touch keyboard and emoji panel.
+var shellFlyoutProcesses = []string{
+	"startmenuexperiencehost.exe", "searchhost.exe", "searchapp.exe", "searchui.exe", "shellexperiencehost.exe", "textinputhost.exe",
+}
+
+// shellOverlay reports whether a foreground window of this process image name and window class is a shell flyout
+// that focus_window may close with Esc. No other window gets a key: ribbon programs such as AutoCAD enter key-tip
+// mode or cancel a command on injected keys.
+func shellOverlay(process, class string) bool {
+	return slices.Contains(shellFlyoutProcesses, strings.ToLower(process)) || strings.EqualFold(class, "Shell_LightDismissOverlay")
+}
+
+// dismissShellOverlay presses Esc once when the foreground window, other than target, is a shell flyout (see
+// shellOverlay), which otherwise often keeps SetForegroundWindow from working, and waits up to 200 ms for the
+// foreground to change. It returns the flyout's description when the foreground changed, else "": when UIPI drops the
+// key (a flyout of higher integrity) activation proceeds as before.
+func dismissShellOverlay(target windows.HWND) string {
+	fg := windows.GetForegroundWindow()
+	if fg == 0 || fg == target {
+		return ""
+	}
+	var pid uint32
+	windows.GetWindowThreadProcessId(fg, &pid)
+	process, class := processName(pid), className(fg)
+	if !shellOverlay(process, class) {
+		return ""
+	}
+	const vkEscape = 0x1B
+	esc := []inputEvent{{Type: 1, Key: keyboardInput{VK: vkEscape}}, {Type: 1, Key: keyboardInput{VK: vkEscape, Flags: keyUp}}}
+	if n, _ := sendInputEvents(esc); n == 0 {
+		return ""
+	}
+	for deadline := time.Now().Add(200 * time.Millisecond); windows.GetForegroundWindow() == fg; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			return ""
+		}
+	}
+	return fmt.Sprintf("%s (class %s)", process, class)
 }
 
 // hscroll turns the horizontal wheel at a screen point through SendInput; the Hyper-V synthetic mouse has no
