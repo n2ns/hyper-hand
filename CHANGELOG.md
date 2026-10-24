@@ -4,11 +4,13 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-24
+
+The guest protocol moves to generation 6: after updating the host, run `vm_update_agent` for every VM; until then tools refuse its agent with `agent_outdated`.
 
 ### Added
 
-- `vm_apps` lists packaged (UWP/MSIX) applications of the agent's user from `Get-StartApps`, with `launch.aumid` (and empty `path`/`cwd`); `running` matches processes by their Application User Model ID and `windows` includes the `ApplicationFrameHost` frame windows that host them. `vm_launch` takes `aumid` instead of `path` and activates the app through `IApplicationActivationManager`; the returned window is the frame window. `vm_windows` reports `hosted_pid` on such frames. Requires `vm_update_agent` (guest protocol 6).
+- `vm_apps` lists packaged (UWP/MSIX) applications of the agent's user from `Get-StartApps`, with `launch.aumid` (and empty `path`/`cwd`); `running` matches processes by their Application User Model ID and `windows` includes the `ApplicationFrameHost` frame windows that host them. `vm_launch` takes `aumid` instead of `path` and activates the app through `IApplicationActivationManager`; the returned window is the frame window. `vm_windows` reports `hosted_pid` on such frames, and a `pid` selector also matches the frame of that app, so the `pid` and `handle` of a `vm_launch` result can be passed together. A multi-instance app such as Calculator starts another process on a second launch. Requires `vm_update_agent` (guest protocol 6).
 - The host service is restarted by Windows after a failure (5 s, 30 s and 60 s after the first three failures in a day). This includes the service stopping itself with an error exit code. The installer sets this for a new and an existing `HyperHandService`.
 
 ### Changed
@@ -16,7 +18,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `vm_observe` (and `observe_after`) shrink the screenshot to the model token budget by default: the longest side at most 1568 pixels and at most 1568 tiles of 28 x 28 pixels. `max_size: -1` returns the original size; a positive `max_size` keeps its meaning. Coordinates still refer to the returned image.
 - The control tree limits the children read under each parent: up to 100 children are all read; 101 to 499 only those visible in the window; 500 or more none. The parent's line then ends with `omitted_children=N` and `controls_truncated` is `true`; use `vm_find_controls` or scroll to reach the rest. `vm_find_controls` is not limited. Requires `vm_update_agent` (guest protocol 6).
 - Before activating a target, the agent closes a system shell flyout in the foreground (Start, search, action center, touch keyboard, light-dismiss overlays) with one Esc; no key is sent to any other window. The action result reports it as `dismissed`; when a flyout keeps the foreground, `activate_failed` names raw `vm_key esc`. Requires `vm_update_agent`.
-- Development installs from a WSL checkout: `scripts/dev-install.sh` cross-compiles both executables and runs `hyperhand.exe dev-install --no-build` on the host, which copies them to `%LOCALAPPDATA%\HyperHandDev` before starting the `HyperHand Dev Install` task; the task now runs `%LOCALAPPDATA%\HyperHandDev\hyperhand.exe` instead of a file in the checkout, so register it again with `scripts/dev-install-setup.ps1` (delete the old task first). `scripts/test-windows.sh` runs `go vet` and the race-enabled tests on the host from WSL.
 - UI Automation observations and control searches use bounded per-element property caches while walking, preserving node/depth/visited limits and password-descendant pruning. Name and Value remain live reads; searches cache only the selector properties they need. Requires `vm_update_agent`.
 
 ### Fixed
