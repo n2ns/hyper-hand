@@ -133,3 +133,68 @@ func TestLaunchTimeoutLeavesProcessRunning(t *testing.T) {
 		t.Errorf("missing path: %v", e)
 	}
 }
+
+// A UWP app's window belongs to ApplicationFrameHost.exe; vm_launch finds it through hosted_pid and forwards aumid.
+func TestLaunchAUMIDFindsFrameWindow(t *testing.T) {
+	launchPollInterval = 5 * time.Millisecond
+	defer func() { launchPollInterval = 300 * time.Millisecond }()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var launch proto.LaunchArgs
+	b := newFakeAgentBackend(func(req proto.Request) (any, error) {
+		switch req.Op {
+		case proto.OpLaunch:
+			json.Unmarshal(req.Args, &launch)
+			return proto.LaunchResult{PID: 6100}, nil
+		case proto.OpListWindows:
+			return proto.WindowsResult{Windows: []proto.WindowInfo{
+				{Handle: 1, PID: 900, Title: "Settings", Class: "ApplicationFrameWindow", Process: "ApplicationFrameHost.exe", HostedPID: 6200},
+				{Handle: 2, PID: 900, Title: "Calculator", Class: "ApplicationFrameWindow", Process: "ApplicationFrameHost.exe", HostedPID: 6100},
+			}}, nil
+		}
+		return nil, errors.New("unexpected op " + req.Op)
+	})
+	cs, _ := connectTools(t, ctx, b)
+	var out launchOut
+	callJSON(t, ctx, cs, "vm_launch", map[string]any{"aumid": "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", "args": []string{"a", "b c"}}, &out)
+	if out.PID != 6100 || out.Handle != 2 || out.Title != "Calculator" || out.Class != "ApplicationFrameWindow" {
+		t.Errorf("launch result %+v", out)
+	}
+	if launch.AUMID != "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App" || launch.Path != "" || launch.Cwd != "" || launch.Admin || len(launch.Args) != 2 {
+		t.Errorf("launch args %+v", launch)
+	}
+}
+
+func TestLaunchAUMIDExclusive(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	b := newFakeAgentBackend(func(req proto.Request) (any, error) {
+		t.Errorf("refused call reached the agent: %s", req.Op)
+		return nil, errors.New("unexpected op " + req.Op)
+	})
+	cs, _ := connectTools(t, ctx, b)
+	aumid := "Microsoft.WindowsCalculator_8wekyb3d8bbwe!App"
+	for _, args := range []map[string]any{
+		{"aumid": aumid, "path": `C:\x.exe`},
+		{"aumid": aumid, "cwd": `C:\`},
+		{"aumid": aumid, "admin": true},
+	} {
+		e := callRefused(t, ctx, cs, "vm_launch", args)
+		if e["error"] != codeInvalidArgument || e["next"] != "pass aumid alone (with optional args) for a packaged app, or path with optional args, cwd and admin for a program" {
+			t.Errorf("%v: %v", args, e)
+		}
+	}
+	if e := callRefused(t, ctx, cs, "vm_launch", map[string]any{"args": []string{"x"}}); e["error"] != codeInvalidArgument || e["next"] != "pass path, or aumid for a packaged app; vm_apps returns either in launch" {
+		t.Errorf("neither path nor aumid: %v", e)
+	}
+}
+
+func TestWindowOfPIDHostedFrame(t *testing.T) {
+	ws := []proto.WindowInfo{{Handle: 1, PID: 900, Title: "Other app", HostedPID: 5}, {Handle: 2, PID: 900, Title: "App", HostedPID: 7}}
+	if w, ok := windowOfPID(ws, 7); !ok || w.Handle != 2 {
+		t.Errorf("hosted frame: %+v %v", w, ok)
+	}
+	if _, ok := windowOfPID(ws, 8); ok {
+		t.Error("other PID matched")
+	}
+}

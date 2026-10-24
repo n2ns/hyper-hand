@@ -29,14 +29,14 @@ Every tool except `vm_list` requires `vm`; see 2.3.
 | `vm_restore` | Restore a checkpoint by `id` (or by `name` when it is unique) and start the VM unless `start` is false; `save_current: true` first saves the current state as a `temp` checkpoint |
 | `vm_set_checkpoint_type` | Set the VM's checkpoint setting (`Standard`, `Production`, `ProductionOnly`, `Disabled`) that decides what `vm_checkpoint` creates; returns the previous one |
 | `vm_checkpoint_keep`, `vm_checkpoint_delete` | Rename a `temp` checkpoint to `keep` so that `vm_end_turn` leaves it alone; delete a checkpoint by `id` (`manual` ones by `id` only), with `subtree: true` its whole branch, waiting for Hyper-V to merge the disks |
-| `vm_windows` | List visible windows: handle, title, class, process, rect, enabled, foreground, owner, `group_root`, `integrity`; plus the foreground handle, the focused control and the session state |
+| `vm_windows` | List visible windows: handle, title, class, process, rect, enabled, foreground, owner, `group_root`, `integrity`, `hosted_pid`; plus the foreground handle, the focused control and the session state |
 | `vm_observe` | The observation entry point: PNG of the screen or of one window (`handle`), the focused control, `selected_text` and with `controls: true` the indexed control tree (`diff_from` for changes only); returns an `observation_id` |
 | `vm_find_controls` | Bounded control search by AutomationId, name or type; returns actionable indexes and explicit unique/multiple/not-found/incomplete status |
 | `vm_click`, `vm_drag`, `vm_scroll` | Mouse at image pixels of an `observation_id`, or at a control `index` (`vm_click`); `button`, `count`, `modifiers`, `delta_y`/`delta_x`; without an observation, raw screen pixels |
 | `vm_set_value`, `vm_invoke` | Set a control's value, Invoke, Toggle, Expand, Collapse, Select, ScrollIntoView, or ScrollUp/Down/Left/Right by its observation `index`; returns actual `state` and read-back `verified` (unknown outcomes remain null) |
 | `vm_type`, `vm_key` | Type Unicode text into a window (`handle`/`pid`, or an observation `index` to focus first) as key events, never through the clipboard; press one key combination or a `sequence` (numeric keypad and X11-style names included) |
-| `vm_apps` | Find launchable desktop applications by name or executable path; return stable IDs, `launch` arguments for `vm_launch`, running state and visible window handles |
-| `vm_launch` | Start a program detached and return its `pid` and first window's `handle`, `title` and `class` |
+| `vm_apps` | Find launchable desktop applications and packaged UWP/MSIX apps by name, executable path or AUMID; return stable IDs, `launch` arguments for `vm_launch`, running state and visible window handles |
+| `vm_launch` | Start a program detached, or activate a packaged app by `aumid`, and return its `pid` and first window's `handle`, `title` and `class` |
 | `vm_exec` | Run a command to completion in the guest; `shell`, `cwd`, `timeout_ms`, `admin`; `background: true` starts it as a job and returns its `id` at once |
 | `vm_job` | Read a background job's state and output incrementally (`stdout_offset`/`stderr_offset`, `wait_ms`), cancel its process tree, or list the agent's jobs; jobs survive reconnects and host restarts |
 | `vm_push`, `vm_pull` | Copy files or directories host to guest and back; `vm_push` skips unchanged files unless `force` is true. `mode: mirror` synchronizes exact directory contents with `phase: plan` then `phase: apply` and the returned `plan_id` |

@@ -29,6 +29,7 @@ type appCandidate struct {
 	Path      string `json:"path"`
 	Arguments string `json:"arguments"`
 	Cwd       string `json:"cwd"`
+	AUMID     string `json:"aumid"` // a packaged application; Path, Arguments and Cwd are then empty
 }
 
 type appSourceResult struct {
@@ -51,12 +52,17 @@ func listApps(ctx context.Context, args json.RawMessage, _ []byte) (any, []byte,
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
+	// The packaged-app helper is a separate PowerShell process; it runs while the Start Menu helper and the registry
+	// are read.
+	packagedCh := make(chan appSourceResult, 1)
+	go func() { packagedCh <- packagedApps(ctx) }()
 	reg := appPaths(ctx)
 	shortcuts := startMenuApps(ctx)
+	packaged := <-packagedCh
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	r, err := combineApps(a, reg, shortcuts)
+	r, err := combineApps(a, reg, shortcuts, packaged)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -95,6 +101,24 @@ func combineApps(a proto.ListAppsArgs, sources ...appSourceResult) (proto.ListAp
 	seen := map[string]bool{}
 	query := strings.ToLower(strings.TrimSpace(a.Query))
 	for _, c := range candidates {
+		if c.AUMID != "" {
+			if !packagedAUMID(c.AUMID) {
+				continue
+			}
+			// Package family names and application IDs are case-insensitive.
+			identity, _ := json.Marshal([]string{"aumid", strings.ToLower(c.AUMID)})
+			hash := sha256.Sum256(identity)
+			id := "app-" + hex.EncodeToString(hash[:16])
+			if query != "" && !strings.Contains(strings.ToLower(c.Name), query) && !strings.Contains(strings.ToLower(c.AUMID), query) {
+				continue
+			}
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			r.Apps = append(r.Apps, proto.AppInfo{ID: id, Name: c.Name, Launch: proto.AppLaunch{Args: []string{}, AUMID: c.AUMID}, Windows: []proto.AppWindow{}})
+			continue
+		}
 		if !filepath.IsAbs(c.Path) || !strings.EqualFold(filepath.Ext(c.Path), ".exe") {
 			continue
 		}
@@ -126,6 +150,14 @@ func combineApps(a proto.ListAppsArgs, sources ...appSourceResult) (proto.ListAp
 		r.Apps = r.Apps[:a.Limit]
 	}
 	return r, nil
+}
+
+// packagedAUMID reports whether id has the form of a packaged application's Application User Model ID,
+// PackageFamilyName!ApplicationId. Start-menu IDs of desktop programs are paths or registered IDs without '!'; a path
+// may contain '!', so separators, colons and spaces also rule an ID out.
+func packagedAUMID(id string) bool {
+	family, app, ok := strings.Cut(id, "!")
+	return ok && family != "" && app != "" && !strings.ContainsAny(id, "\\/: \t\"") && !strings.Contains(app, "!")
 }
 
 func appPathKey(path string) string {
@@ -334,28 +366,56 @@ func startMenuApps(ctx context.Context) appSourceResult {
 }
 
 func readStartMenuApps(ctx context.Context, root string) appSourceResult {
+	var args []string
+	if root != "" {
+		args = []string{"-Root", root}
+	}
+	return runAppsHelper(ctx, "Start Menu", appShortcutsScript, args...)
+}
+
+// packagedAppsScript lists the current user's packaged (UWP/MSIX) applications with Get-StartApps, which enumerates
+// the shell's Applications folder (shell:AppsFolder): the display name and the AppID, which for a packaged application
+// is its Application User Model ID (PackageFamilyName!ApplicationId). Desktop programs in the same list have a path or
+// a registered ID without '!' and are left to the other sources.
+const packagedAppsScript = `
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+function Emit($value) { [Console]::WriteLine(($value | ConvertTo-Json -Compress -Depth 4)) }
+try {
+    foreach ($app in @(Get-StartApps)) {
+        if ([string]$app.AppID -like '*!*') { Emit @{ app = @{ name = [string]$app.Name; aumid = [string]$app.AppID } } }
+    }
+    Emit @{ completed = 1 }
+} catch { Emit @{ warning = ('Get-StartApps: ' + $_.Exception.Message) } }
+`
+
+func packagedApps(ctx context.Context) appSourceResult {
+	return runAppsHelper(ctx, "Packaged apps", packagedAppsScript)
+}
+
+// runAppsHelper runs script in a PowerShell child process bounded to 10 seconds and reads its records: one JSON object
+// per line with an app, a warning or a completed source. label prefixes the helper's own failures.
+func runAppsHelper(ctx context.Context, label, script string, args ...string) appSourceResult {
 	r := appSourceResult{}
 	f, err := os.CreateTemp("", "hyperhand-apps-*.ps1")
 	if err != nil {
-		r.Warnings = append(r.Warnings, "Start Menu: "+err.Error())
+		r.Warnings = append(r.Warnings, label+": "+err.Error())
 		return r
 	}
 	defer os.Remove(f.Name())
-	_, err = f.WriteString(appShortcutsScript)
+	_, err = f.WriteString(script)
 	closeErr := f.Close()
 	if err == nil {
 		err = closeErr
 	}
 	if err != nil {
-		r.Warnings = append(r.Warnings, "Start Menu: "+err.Error())
+		r.Warnings = append(r.Warnings, label+": "+err.Error())
 		return r
 	}
 	opctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(opctx, filepath.Join(os.Getenv("SystemRoot"), "System32", "WindowsPowerShell", "v1.0", "powershell.exe"), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", f.Name())
-	if root != "" {
-		cmd.Args = append(cmd.Args, "-Root", root)
-	}
+	cmd.Args = append(cmd.Args, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW}
 	cmd.WaitDelay = time.Second
 	var out controlsBuffer
@@ -370,7 +430,7 @@ func readStartMenuApps(ctx context.Context, root string) appSourceResult {
 			Completed int           `json:"completed"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &record) != nil {
-			r.Warnings = append(r.Warnings, "Start Menu: invalid helper output")
+			r.Warnings = append(r.Warnings, label+": invalid helper output")
 			continue
 		}
 		if record.App != nil {
@@ -382,13 +442,13 @@ func readStartMenuApps(ctx context.Context, root string) appSourceResult {
 		r.Completed += record.Completed
 	}
 	if scanner.Err() != nil {
-		r.Warnings = append(r.Warnings, "Start Menu: "+scanner.Err().Error())
+		r.Warnings = append(r.Warnings, label+": "+scanner.Err().Error())
 	}
 	if opctx.Err() != nil {
 		err = opctx.Err()
 	}
 	if err != nil {
-		r.Warnings = append(r.Warnings, "Start Menu: "+err.Error())
+		r.Warnings = append(r.Warnings, label+": "+err.Error())
 	}
 	return r
 }
@@ -405,6 +465,7 @@ func attachAppProcesses(ctx context.Context, apps []proto.AppInfo) error {
 	}
 	defer pWTSFreeMemory.Call(uintptr(buf))
 	paths := map[uint32]string{}
+	aumids := map[uint32]string{} // lowercase Application User Model IDs of packaged processes
 	unreadable := 0
 	for _, p := range unsafe.Slice((*wtsProcessInfo)(buf), n) {
 		if err := ctx.Err(); err != nil {
@@ -421,6 +482,9 @@ func attachAppProcesses(ctx context.Context, apps []proto.AppInfo) error {
 		name := make([]uint16, windows.MAX_LONG_PATH)
 		size := uint32(len(name))
 		r, _, _ := pQueryFullProcessImageName.Call(uintptr(h), 0, uintptr(unsafe.Pointer(&name[0])), uintptr(unsafe.Pointer(&size)))
+		if id := processAUMID(h); id != "" {
+			aumids[p.ProcessID] = strings.ToLower(id)
+		}
 		windows.CloseHandle(h)
 		if r != 0 {
 			paths[p.ProcessID] = runningPathKey(windows.UTF16ToString(name[:size]))
@@ -434,6 +498,10 @@ func attachAppProcesses(ctx context.Context, apps []proto.AppInfo) error {
 			byPath[path] = []proto.AppWindow{}
 		}
 	}
+	byAUMID := map[string][]proto.AppWindow{}
+	for _, id := range aumids {
+		byAUMID[id] = []proto.AppWindow{}
+	}
 	for _, h := range topWindows() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -443,8 +511,24 @@ func attachAppProcesses(ctx context.Context, apps []proto.AppInfo) error {
 		if path, ok := paths[pid]; ok {
 			byPath[path] = append(byPath[path], proto.AppWindow{Handle: uint64(h), PID: pid, Title: windowText(h)})
 		}
+		// A packaged desktop program owns its windows; a UWP app's top-level window is an ApplicationFrameHost frame
+		// hosting the app's CoreWindow. PID stays the window's owner, which vm_observe checks against the handle.
+		id, ok := aumids[pid]
+		if !ok {
+			id, ok = aumids[hostedPID(h, className(h), pid)]
+		}
+		if ok {
+			byAUMID[id] = append(byAUMID[id], proto.AppWindow{Handle: uint64(h), PID: pid, Title: windowText(h)})
+		}
 	}
 	for i := range apps {
+		if apps[i].Launch.AUMID != "" {
+			if ws, ok := byAUMID[strings.ToLower(apps[i].Launch.AUMID)]; ok {
+				apps[i].Running = true
+				apps[i].Windows = ws
+			}
+			continue
+		}
 		if ws, ok := byPath[runningPathKey(apps[i].Launch.Path)]; ok {
 			apps[i].Running = true
 			apps[i].Windows = ws

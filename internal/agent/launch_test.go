@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/windows"
+
 	"hyperhand/internal/proto"
 )
 
@@ -59,5 +61,30 @@ func TestLaunchErrors(t *testing.T) {
 		if _, _, err := launch(context.Background(), mustJSON(a), nil); err == nil {
 			t.Errorf("accepted %+v", a)
 		}
+	}
+}
+
+func TestLaunchAUMIDErrors(t *testing.T) {
+	aumid := "HyperHand.Test.NotInstalled_0000000000000!App"
+	for _, a := range []proto.LaunchArgs{
+		{AUMID: aumid, Path: os.Args[0]},
+		{AUMID: aumid, Cwd: t.TempDir()},
+		{AUMID: aumid, Admin: true},
+		{AUMID: `C:\Windows\notepad.exe`},
+		// Well formed but not installed: ActivateApplication fails (AO_NOERRORUI, so no dialog) and nothing starts.
+		{AUMID: aumid},
+	} {
+		_, _, err := launch(context.Background(), mustJSON(a), nil)
+		if err == nil {
+			t.Errorf("accepted %+v", a)
+			continue
+		}
+		t.Logf("%+v: %v", a, err)
+	}
+}
+
+func TestProcessAUMIDOfDesktopProcess(t *testing.T) {
+	if id := processAUMID(windows.CurrentProcess()); id != "" {
+		t.Errorf("the test process has no package identity, got %q", id)
 	}
 }
