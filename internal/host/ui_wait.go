@@ -340,6 +340,10 @@ func (d *deps) sampleUIWait(ctx context.Context, in waitIn, target *uiWaitTarget
 	last["controls_truncated"] = tree.Truncated
 	if tree.Truncated && (target.runtime == "" || len(matches) == 0) {
 		last["unknown"] = "truncated control tree cannot prove absence or selector uniqueness; increase max_depth/max_nodes or use a known runtime ID"
+		if slices.Contains(tree.Truncation, "child_limit") {
+			// Raising the limits does not read children the per-parent child limit leaves out.
+			last["unknown"] = "truncated control tree cannot prove absence or selector uniqueness: the per-parent child limit left children out; find the control with vm_find_controls and wait on its observation_id and index"
+		}
 		return false, last, nil
 	}
 	last["control_exists"] = len(matches) == 1

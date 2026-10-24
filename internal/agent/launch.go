@@ -53,7 +53,10 @@ var pGetApplicationUserModelId = kernel32.NewProc("GetApplicationUserModelId")
 const (
 	activateOptionsNoErrorUI = 0x2 // AO_NOERRORUI: no error dialog in the guest when activation fails
 	appModelIDMaxLength      = 130 // APPLICATION_USER_MODEL_ID_MAX_LENGTH, including the terminating null
+	clsctxLocalServer        = 0x4
 )
+
+var procCoCreateInstance = windows.NewLazySystemDLL("ole32.dll").NewProc("CoCreateInstance")
 
 // activatePackagedApp activates the packaged (UWP/MSIX) application aumid with arguments through
 // IApplicationActivationManager::ActivateApplication and returns the PID of its process. An application that is
@@ -71,9 +74,12 @@ func activatePackagedApp(aumid, arguments string) (uint32, error) {
 		}
 	}
 	defer ole.CoUninitialize()
-	manager, err := ole.CreateInstance(ole.NewGUID("{45BA127D-10A8-46EA-8AB7-56EA9078943C}"), ole.NewGUID("{2E941141-7F97-4756-BA1D-9DECDE894A3D}"))
-	if err != nil {
-		return 0, fmt.Errorf("ApplicationActivationManager: %w", err)
+	// The activation manager is created out of process (CLSCTX_LOCAL_SERVER), as Microsoft's samples do, so the
+	// activation does not depend on this process's token; go-ole's CreateInstance would allow an in-process server.
+	var manager *ole.IUnknown
+	hr, _, _ := procCoCreateInstance.Call(uintptr(unsafe.Pointer(ole.NewGUID("{45BA127D-10A8-46EA-8AB7-56EA9078943C}"))), 0, clsctxLocalServer, uintptr(unsafe.Pointer(ole.NewGUID("{2E941141-7F97-4756-BA1D-9DECDE894A3D}"))), uintptr(unsafe.Pointer(&manager)))
+	if int32(hr) < 0 {
+		return 0, fmt.Errorf("ApplicationActivationManager: HRESULT 0x%08x", uint32(hr))
 	}
 	defer manager.Release()
 	id, err := windows.UTF16PtrFromString(aumid)
@@ -89,7 +95,7 @@ func activatePackagedApp(aumid, arguments string) (uint32, error) {
 	var pid uint32
 	// IApplicationActivationManager::ActivateApplication is vtable slot 3, after IUnknown's three methods.
 	method := *(*uintptr)(unsafe.Add(unsafe.Pointer(manager.RawVTable), 3*unsafe.Sizeof(uintptr(0))))
-	hr, _, _ := syscall.SyscallN(method, uintptr(unsafe.Pointer(manager)), uintptr(unsafe.Pointer(id)), uintptr(unsafe.Pointer(args)), activateOptionsNoErrorUI, uintptr(unsafe.Pointer(&pid)))
+	hr, _, _ = syscall.SyscallN(method, uintptr(unsafe.Pointer(manager)), uintptr(unsafe.Pointer(id)), uintptr(unsafe.Pointer(args)), activateOptionsNoErrorUI, uintptr(unsafe.Pointer(&pid)))
 	runtime.KeepAlive(manager)
 	runtime.KeepAlive(id)
 	runtime.KeepAlive(args)

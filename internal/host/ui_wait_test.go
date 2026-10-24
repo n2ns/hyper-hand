@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,5 +127,22 @@ func TestUIWaitValidatesExpectedState(t *testing.T) {
 	}
 	if err := validateUIWait(waitIn{Kind: "control_matches", Handle: 10, AutomationID: "edit", Value: new("")}); err != nil {
 		t.Fatalf("empty string value rejected: %v", err)
+	}
+}
+
+func TestUIWaitChildLimitHint(t *testing.T) {
+	for _, tc := range []struct {
+		truncation []string
+		want       string
+	}{
+		{[]string{"max_nodes"}, "increase max_depth/max_nodes"},
+		{[]string{"max_nodes", "child_limit"}, "vm_find_controls"},
+	} {
+		d, ws := uiWaitSampleDeps(proto.ControlsResult{Nodes: []proto.ControlInfo{{AutomationID: "other"}}, Truncated: true, Truncation: tc.truncation})
+		target := uiWaitTarget{selector: windowSelector{Handle: 10}, window: &ws.Windows[0]}
+		_, last, err := d.sampleUIWait(context.Background(), waitIn{VM: "A", Kind: "control_exists", AutomationID: "wanted"}, &target)
+		if unknown, _ := last["unknown"].(string); err != nil || !strings.Contains(unknown, tc.want) {
+			t.Errorf("%v: unknown %q err %v", tc.truncation, unknown, err)
+		}
 	}
 }

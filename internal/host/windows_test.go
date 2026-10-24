@@ -181,3 +181,15 @@ func TestListWindowsOldAgent(t *testing.T) {
 		t.Errorf("list: %v", err)
 	}
 }
+
+func TestResolveWindowHostedPID(t *testing.T) {
+	ws := []proto.WindowInfo{{Handle: 2, PID: 900, Process: "ApplicationFrameHost.exe", Class: "ApplicationFrameWindow", HostedPID: 6100}, {Handle: 3, PID: 7000}}
+	for _, s := range []windowSelector{{Handle: 2, PID: 6100}, {PID: 6100}, {Handle: 2, PID: 900}, {Handle: 2}} {
+		if w, err := resolveWindow(ws, s); err != nil || w.Handle != 2 {
+			t.Errorf("%+v: %+v %v", s, w, err)
+		}
+	}
+	if _, err := resolveWindow(ws, windowSelector{Handle: 3, PID: 6100}); err == nil {
+		t.Error("hosted pid selected another window")
+	}
+}

@@ -34,7 +34,7 @@ var launchPollInterval = 300 * time.Millisecond
 // registerLaunch registers vm_launch.
 func registerLaunch(d *deps) {
 	addToolIn(d, toolSpec{name: "vm_launch", desc: "Start a program in the guest as a detached process (it outlives the call) and wait until it shows a visible top-level window; returns the pid and the window's handle, title and class to pass to vm_observe and the actions. A splash screen or dialog of the process counts as its window. On no_window the process keeps running. " +
-		"For a packaged (UWP/MSIX) app pass aumid from vm_apps instead of path (no cwd or admin); it is activated and pid is the app's process. A UWP app's window is its ApplicationFrameHost.exe frame, whose own pid differs: pass only the handle to vm_observe."}, func(ctx context.Context, in launchIn) (*mcp.CallToolResult, error) {
+		"For a packaged (UWP/MSIX) app pass aumid from vm_apps instead of path (no cwd or admin); it is activated and pid is the app's process. A UWP app's window is its ApplicationFrameHost.exe frame; window selectors accept the app's pid for it, so pid and handle can be passed together."}, func(ctx context.Context, in launchIn) (*mcp.CallToolResult, error) {
 		if in.AUMID != "" && (in.Path != "" || in.Cwd != "" || in.Admin) {
 			return nil, refuse(codeInvalidArgument, "pass aumid alone (with optional args) for a packaged app, or path with optional args, cwd and admin for a program", nil,
 				"aumid cannot be combined with path, cwd or admin")
