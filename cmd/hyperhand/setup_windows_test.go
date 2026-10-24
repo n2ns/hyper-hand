@@ -2,10 +2,12 @@ package main
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -464,5 +466,58 @@ func TestOpenProcessWithPathExited(t *testing.T) {
 	h, err := openProcessWithPath(pid, windows.PROCESS_TERMINATE, self)
 	if err != nil || h != 0 {
 		t.Fatalf("exited child: %v %v", h, err)
+	}
+}
+
+func TestWriteProtectedCreatesNewFileOnly(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "dst")
+	user, _ := windows.GetCurrentProcessToken().GetTokenUser()
+	sddl := "D:P(A;;FA;;;" + user.User.Sid.String() + ")"
+	if err := writeProtected(dst, sddl, []byte("agent")); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(dst); err != nil || string(b) != "agent" {
+		t.Fatalf("content %q %v", b, err)
+	}
+	if err := writeProtected(dst, sddl, []byte("other")); err == nil {
+		t.Fatal("overwrote an existing file")
+	}
+}
+
+func TestUninstallEntry(t *testing.T) {
+	p := setupPaths{bin: `C:\Program Files\HyperHand`, hostExe: `C:\Program Files\HyperHand\hyperhand.exe`}
+	strs, dwords := uninstallEntry(p, "0.6.0", 15700)
+	want := map[string]string{
+		"DisplayName":          "HyperHand",
+		"DisplayVersion":       "0.6.0",
+		"Publisher":            "n2ns",
+		"InstallLocation":      `C:\Program Files\HyperHand`,
+		"DisplayIcon":          `C:\Program Files\HyperHand\hyperhand.exe`,
+		"UninstallString":      `"C:\Program Files\HyperHand\hyperhand.exe" uninstall`,
+		"QuietUninstallString": `"C:\Program Files\HyperHand\hyperhand.exe" uninstall --quiet`,
+		"URLInfoAbout":         "https://github.com/n2ns/hyper-hand",
+	}
+	if !maps.Equal(strs, want) {
+		t.Errorf("strings %v", strs)
+	}
+	if !maps.Equal(dwords, map[string]uint32{"NoModify": 1, "NoRepair": 1, "EstimatedSize": 15700}) {
+		t.Errorf("dwords %v", dwords)
+	}
+}
+
+func TestParseUninstallArgs(t *testing.T) {
+	quiet, rest := parseUninstallArgs([]string{"--quiet", "--owner-sid", "S-1-5-21-1", "--owner-user", `PC\me`})
+	if !quiet || !slices.Equal(rest, []string{"--owner-sid", "S-1-5-21-1", "--owner-user", `PC\me`}) {
+		t.Errorf("quiet %v rest %v", quiet, rest)
+	}
+	if quiet, rest := parseUninstallArgs(nil); quiet || len(rest) != 0 {
+		t.Errorf("no args: %v %v", quiet, rest)
+	}
+}
+
+// A plain go build (tests included) embeds only the directory's README, so install needs the agent beside it.
+func TestPlainBuildEmbedsNoAgent(t *testing.T) {
+	if data, err := embeddedAgent(); err != nil || data != nil {
+		t.Errorf("embedded agent %d bytes, %v", len(data), err)
 	}
 }

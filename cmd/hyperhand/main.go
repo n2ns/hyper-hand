@@ -2,7 +2,7 @@
 //
 //	hyperhand.exe [-port 8770]   run the tray and MCP server as the current user
 //	hyperhand.exe install        install the dedicated Hyper-V service and user logon task
-//	hyperhand.exe uninstall      remove the host service and user logon task
+//	hyperhand.exe uninstall      remove the host service and user logon task (--quiet: no dialogs, elevated only)
 //	hyperhand.exe dev-install    development: build this checkout and install it through the preauthorized task (no UAC)
 package main
 
@@ -49,11 +49,6 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "dev-install" {
 		os.Exit(devInstallCommand(os.Args[2:]))
 	}
-	// Before the log file is opened, so uninstall can delete its folder.
-	if len(os.Args) > 1 && os.Args[1] == "uninstall" {
-		uninstall()
-		return
-	}
 	if len(os.Args) > 1 && os.Args[1] == "uninstall-cleanup" {
 		uninstallCleanup(os.Args[2:])
 		return
@@ -62,6 +57,11 @@ func main() {
 	os.MkdirAll(dir, 0o755)
 	if f, err := os.OpenFile(filepath.Join(dir, "hyperhand.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
 		log.SetOutput(f)
+	}
+	// After the log file is opened: uninstall keeps the user's logs, and uninstall --quiet reports failures only there.
+	if len(os.Args) > 1 && os.Args[1] == "uninstall" {
+		uninstall()
+		return
 	}
 
 	if len(os.Args) > 1 && os.Args[1] == "startup" {

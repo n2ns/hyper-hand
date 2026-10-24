@@ -14,9 +14,11 @@ HyperHand consists of a tray program and a Windows service on the host, and a sm
 
 Download `hyperhand-X.Y.Z-windows-amd64.zip` from [Releases](https://github.com/n2ns/hyper-hand/releases). It contains `hyperhand.exe`, `hyperhand-agent.exe` (both Windows amd64, with the version stamped in), `README.md` and `CHANGELOG.md`. Extract both executables to the same folder. The installer copies them to `%ProgramFiles%\HyperHand`; the logon task uses that installed copy.
 
+Releases newer than 0.5.0 also offer `hyperhand-X.Y.Z-windows-amd64.exe`, a single executable with the agent built in: run it with `install` instead of extracting the zip (`.\hyperhand-X.Y.Z-windows-amd64.exe install`).
+
 To build from source instead, see [Building HyperHand](building.md#build).
 
-Keep `hyperhand-agent.exe` in the same directory as `hyperhand.exe` when installing or updating. Guest installation and update use the installed agent executable.
+When installing or updating from the zip, keep `hyperhand-agent.exe` in the same directory as `hyperhand.exe`; it takes precedence over an agent built into `hyperhand.exe`. Guest installation and update use the installed agent executable.
 
 ## 2. Install the host service and tray
 
@@ -33,7 +35,8 @@ This shows one UAC prompt, then:
 3. Registers the HyperHand Hyper-V socket service under `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\3ce544e1-2645-4383-b332-fedf8a18736b`.
 4. Creates or replaces the `HyperHand` logon task for the installing user, using the installed executable with least privilege. This replaces the old highest-privilege task.
 5. Creates or replaces the `HyperHand Console` task for the installing user: it has no trigger, runs `vmconnect.exe localhost "<VM>"` with that user's highest privileges, and is run by the tray to open a VM's console (see [Watch a VM](#watch-a-vm)).
-6. Starts the service and ordinary tray.
+6. Adds HyperHand to Apps and Features (Settings > Apps), with its version and uninstall command.
+7. Starts the service and ordinary tray.
 
 Run `install` again from a new release or build to update the installed copies. Keep the service installation separate from normal tray startup: launching the installed executable without `install` does not request UAC or change machine configuration.
 
@@ -221,7 +224,7 @@ On the host:
    hyperhand.exe uninstall
    ```
 
-   It requests elevation if needed, stops the installed tray and service, removes `HyperHandService` and its Hyper-V Administrators membership, the `HyperHand` logon task, the `HyperHand Console` task and the Hyper-V socket registration. A protected cleanup helper waits for the installed executable to exit and removes the installed host and agent executables only if their hashes still match. The helper, `%ProgramData%\HyperHand\uninstall-cleanup.exe`, cannot delete itself; it is deleted at the next restart.
+   It requests elevation if needed, stops the installed tray and service, removes `HyperHandService` and its Hyper-V Administrators membership, the `HyperHand` logon task, the `HyperHand Console` task, the Hyper-V socket registration and the Apps and Features entry. Uninstalling from Apps and Features runs the same command. From an elevated prompt, `hyperhand.exe uninstall --quiet` does the same without dialogs (for scripts and package managers); it exits with code 1 on failure and writes the reason to `%LOCALAPPDATA%\HyperHand\hyperhand.log`. A protected cleanup helper waits for the installed executable to exit and removes the installed host and agent executables only if their hashes still match. The helper, `%ProgramData%\HyperHand\uninstall-cleanup.exe`, cannot delete itself; it is deleted at the next restart.
 
    User logs under `%LOCALAPPDATA%\HyperHand`, files inside guests and nonempty `%ProgramData%\HyperHand\service-data` are preserved. When service data remains, `config.json` is retained as the owner marker for reinstallation. Otherwise it removes the owner configuration and empty installation/data directories. It does not claim to remove directories containing other files.
 2. Delete the folder with `hyperhand.exe` (the extracted release or the build directory).
@@ -266,6 +269,6 @@ Check `HyperHandService` in Windows Services. Normal tray startup does not repai
 
 ### Log file
 
-The host tray writes its log to `%LOCALAPPDATA%\HyperHand\hyperhand.log` for the user it runs as. It records the listening address and startup, connection and install errors.
+The host tray writes its log to `%LOCALAPPDATA%\HyperHand\hyperhand.log` for the user it runs as. It records the listening address and startup, connection, install and uninstall errors.
 
 For service startup or broker failures, inspect `%ProgramData%\HyperHand\service-data\broker.log` with administrator access. The service limits it to approximately 1 MiB. Errors may also appear in Event Viewer under **Windows Logs > Application**, with source `HyperHandService`; use the file log if that source is unavailable.

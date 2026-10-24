@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -137,6 +138,9 @@ const (
 	logonTask      = "HyperHand"
 	cleanupExe     = "uninstall-cleanup.exe"
 	socketKey      = `SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\` + proto.ServiceID
+	// uninstallKey is the Apps and Features entry, which package managers (winget) read for the installed version
+	// and the silent uninstall command.
+	uninstallKey = `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\HyperHand`
 )
 
 // setupPaths are the installation's fixed locations. System paths come from known folders and GetSystemDirectory,
@@ -169,6 +173,57 @@ func installPaths() (setupPaths, error) {
 		}
 	}
 	return p, nil
+}
+
+// uninstallEntry returns the string and DWORD values of the Apps and Features entry for an installation.
+func uninstallEntry(p setupPaths, version string, sizeKB uint32) (map[string]string, map[string]uint32) {
+	exe := syscall.EscapeArg(p.hostExe)
+	return map[string]string{
+		"DisplayName":          "HyperHand",
+		"DisplayVersion":       version,
+		"Publisher":            "n2ns",
+		"InstallLocation":      p.bin,
+		"DisplayIcon":          p.hostExe,
+		"UninstallString":      exe + " uninstall",
+		"QuietUninstallString": exe + " uninstall --quiet",
+		"URLInfoAbout":         "https://github.com/n2ns/hyper-hand",
+	}, map[string]uint32{
+		"NoModify":      1,
+		"NoRepair":      1,
+		"EstimatedSize": sizeKB,
+	}
+}
+
+// writeUninstallEntry replaces the Apps and Features entry with the values of this installation.
+func writeUninstallEntry(p setupPaths) error {
+	var size int64
+	for _, path := range []string{p.hostExe, p.agentExe} {
+		fi, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+		size += fi.Size()
+	}
+	if err := registry.DeleteKey(registry.LOCAL_MACHINE, uninstallKey); err != nil && !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+		return err
+	}
+	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, uninstallKey, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+	strs, dwords := uninstallEntry(p, proto.Version, uint32((size+1023)/1024))
+	for name, value := range strs {
+		if err := k.SetStringValue(name, value); err != nil {
+			return err
+		}
+	}
+	for name, value := range dwords {
+		if err := k.SetDWordValue(name, value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // serviceCommand is the service's command line, as mgr.CreateService builds it.
@@ -306,12 +361,20 @@ func inspectInstall(p setupPaths, owner setupIdentity, ts *taskScheduler, m *mgr
 }
 
 func setupInstall(p setupPaths, owner setupIdentity, self string, st installState, ts *taskScheduler, m *mgr.Mgr) (resultErr error) {
+	// The agent beside this executable wins (release zip, development install); a single hyperhand.exe (the
+	// winget installer) installs the agent embedded at build time.
 	sourceAgent := filepath.Join(filepath.Dir(self), "hyperhand-agent.exe")
 	if err := noSetupReparse(sourceAgent); err != nil {
 		return err
 	}
+	var agentData []byte
 	if fi, err := os.Stat(sourceAgent); err != nil || !fi.Mode().IsRegular() {
-		return errors.New("place hyperhand-agent.exe beside hyperhand.exe before installing")
+		if agentData, err = embeddedAgent(); err != nil {
+			return err
+		}
+		if agentData == nil {
+			return errors.New("place hyperhand-agent.exe beside hyperhand.exe before installing; this build contains no embedded agent")
+		}
 	}
 	if err := ensureDir(p.bin); err != nil {
 		return err
@@ -344,11 +407,23 @@ func setupInstall(p setupPaths, owner setupIdentity, self string, st installStat
 	if err := stopProcesses(p.hostExe, self, st.oldExe); err != nil {
 		return err
 	}
-	for _, pair := range [][2]string{{self, p.hostExe}, {sourceAgent, p.agentExe}} {
-		if !strings.EqualFold(pair[0], pair[1]) {
-			if err := replaceFile(pair[0], pair[1]); err != nil {
-				return err
-			}
+	// The entry names the installed version: remove it before the files change, so an install that fails from here
+	// on leaves no entry claiming the old version; it is written again once the installation is complete.
+	if err := registry.DeleteKey(registry.LOCAL_MACHINE, uninstallKey); err != nil && !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+		return err
+	}
+	if !strings.EqualFold(self, p.hostExe) {
+		if err := replaceFile(self, p.hostExe); err != nil {
+			return err
+		}
+	}
+	if agentData != nil {
+		if err := replaceFileData(agentData, p.agentExe); err != nil {
+			return err
+		}
+	} else if !strings.EqualFold(sourceAgent, p.agentExe) {
+		if err := replaceFile(sourceAgent, p.agentExe); err != nil {
+			return err
 		}
 	}
 
@@ -413,6 +488,9 @@ func setupInstall(p setupPaths, owner setupIdentity, self string, st installStat
 	} else if !recognizedConsoleTask(t, p, owner.SID) || !strings.EqualFold(t.actions[0].path, p.hostExe) || t.triggers != 0 {
 		return errors.New("console task verification failed")
 	}
+	if err := writeUninstallEntry(p); err != nil {
+		return err
+	}
 	return ts.run(logonTask)
 }
 
@@ -457,6 +535,9 @@ func setupUninstall(p setupPaths, self string, st installState, ts *taskSchedule
 		}
 	}
 	if err := registry.DeleteKey(registry.LOCAL_MACHINE, socketKey); err != nil && !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
+		return err
+	}
+	if err := registry.DeleteKey(registry.LOCAL_MACHINE, uninstallKey); err != nil && !errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
 		return err
 	}
 	if entries, err := os.ReadDir(p.serviceData); err == nil && len(entries) == 0 {
@@ -680,6 +761,17 @@ func ensureDir(path string) error {
 // replaceFile copies src beside dst under its final protected descriptor, checks the copy's hash and renames it
 // over dst.
 func replaceFile(src, dst string) error {
+	return replaceWith(dst, func() (string, error) { return fileHash(src) }, func(next string, sddl string) error { return copyProtected(src, next, sddl) })
+}
+
+// replaceFileData installs data as dst, like replaceFile.
+func replaceFileData(data []byte, dst string) error {
+	sum := sha256.Sum256(data)
+	return replaceWith(dst, func() (string, error) { return hex.EncodeToString(sum[:]), nil }, func(next string, sddl string) error { return writeProtected(next, sddl, data) })
+}
+
+// replaceWith writes the new file next to dst with write, checks its SHA-256 against want and moves it over dst.
+func replaceWith(dst string, want func() (string, error), write func(next, sddl string) error) error {
 	if _, err := os.Lstat(dst); err == nil {
 		if err := assertOwned(dst); err != nil {
 			return err
@@ -693,16 +785,16 @@ func replaceFile(src, dst string) error {
 		return fmt.Errorf("stale installer file: %s", next)
 	}
 	defer os.Remove(next)
-	if err := copyProtected(src, next, "O:BAG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;BU)"); err != nil {
+	if err := write(next, "O:BAG:SYD:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FRFX;;;BU)"); err != nil {
 		return err
 	}
-	want, err := fileHash(src)
+	wantHash, err := want()
 	if err != nil {
 		return err
 	}
 	if got, err := fileHash(next); err != nil {
 		return err
-	} else if got != want {
+	} else if got != wantHash {
 		return errors.New("copied executable hash mismatch")
 	}
 	from, _ := windows.UTF16PtrFromString(next)
@@ -713,6 +805,21 @@ func replaceFile(src, dst string) error {
 // copyProtected copies src to a new file dst created with the security descriptor sddl, so dst is never accessible
 // under another descriptor.
 func copyProtected(src, dst, sddl string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	return createProtected(dst, sddl, in)
+}
+
+// writeProtected creates dst with the security descriptor sddl and writes data to it.
+func writeProtected(dst, sddl string, data []byte) error {
+	return createProtected(dst, sddl, bytes.NewReader(data))
+}
+
+// createProtected creates dst (which must not exist) with the security descriptor sddl and copies r into it.
+func createProtected(dst, sddl string, r io.Reader) error {
 	if err := noSetupReparse(dst); err != nil {
 		return err
 	}
@@ -728,13 +835,7 @@ func copyProtected(src, dst, sddl string) error {
 		return err
 	}
 	out := os.NewFile(uintptr(h), dst)
-	in, err := os.Open(src)
-	if err != nil {
-		out.Close()
-		return err
-	}
-	defer in.Close()
-	if _, err := io.Copy(out, in); err != nil {
+	if _, err := io.Copy(out, r); err != nil {
 		out.Close()
 		return err
 	}

@@ -66,4 +66,4 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Pushing a `vX.Y.Z` tag runs a GitHub Actions workflow that runs the tests, builds `hyperhand.exe` and `hyperhand-agent.exe` for Windows amd64 with the version stamped in, and publishes a GitHub Release with `hyperhand-X.Y.Z-windows-amd64.zip` (both exes, `README.md` and `CHANGELOG.md`). The release notes are the version's section of `CHANGELOG.md`.
+Pushing a `vX.Y.Z` tag runs a GitHub Actions workflow that runs the tests, builds `hyperhand-agent.exe` and then `hyperhand.exe` for Windows amd64 with the version stamped in, and publishes a GitHub Release with `hyperhand-X.Y.Z-windows-amd64.zip` (both exes, `README.md` and `CHANGELOG.md`) and `hyperhand-X.Y.Z-windows-amd64.exe`. The agent is copied into `cmd/hyperhand/embedded/` before `hyperhand.exe` is built, which embeds it, so that single executable installs both (`install` prefers an agent beside it, as in the zip and development installs). The release notes are the version's section of `CHANGELOG.md`.

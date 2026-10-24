@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A single-file installer: releases also publish `hyperhand-X.Y.Z-windows-amd64.exe`, whose `hyperhand.exe` contains the guest agent, so `install` needs no `hyperhand-agent.exe` beside it (one beside it still takes precedence). `install` adds HyperHand to Apps and Features with its version and uninstall commands, `uninstall` removes the entry, and `uninstall --quiet` uninstalls without dialogs from an elevated process. This prepares a winget package.
+
 ### Changed
 
 - `vm_install_agent` no longer asks for the guest keyboard in English mode. The Hyper-V keyboard types the characters themselves, and the install command arrived unchanged with US, German and French layouts and with Microsoft Pinyin in Chinese mode on Windows 10 22H2; README, the user guide and the tool description say so. Japanese and Korean input methods and Windows 11 guests have not been tested.
