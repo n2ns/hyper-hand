@@ -113,7 +113,7 @@ Uninstall the guest agent first, then the host: run `%LOCALAPPDATA%\HyperHand\hy
 
 ## License
 
-HyperHand is released under the [MIT License](LICENSE).
+HyperHand is released under the [Apache License 2.0](LICENSE).
 
 ## Disclaimer
 
