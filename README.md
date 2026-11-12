@@ -2,6 +2,10 @@
 
 **Give your AI agent a Windows VM it can see, operate and roll back.**
 
+[![release](https://img.shields.io/github/v/release/n2ns/hyper-hand)](https://github.com/n2ns/hyper-hand/releases/latest)
+[![downloads](https://img.shields.io/github/downloads/n2ns/hyper-hand/total)](https://github.com/n2ns/hyper-hand/releases)
+[![license](https://img.shields.io/github/license/n2ns/hyper-hand)](https://github.com/n2ns/hyper-hand/blob/main/LICENSE)
+
 HyperHand is an MCP server for Windows and Hyper-V. Connect Claude Code, Codex or another MCP client to let your agent test installers, operate desktop software, run commands and check the results in a virtual machine.
 
 The host-to-guest connection needs no guest network access, and you do not need to give the AI your guest password. Screenshots, mouse and keyboard input work through Hyper-V, including on sign-in screens and UAC prompts.
